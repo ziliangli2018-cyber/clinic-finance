@@ -1,0 +1,94 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/test.yml
+
+  build:
+    name: Build Pages artifact
+    if: github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Read Pages configuration
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+      - run: npm ci
+      - name: Select deployment environment and asset base
+        shell: bash
+        env:
+          DEPLOY_ENV: ${{ vars.DEPLOY_ENV || 'demo' }}
+          PAGES_BASE_PATH: ${{ vars.PAGES_BASE_PATH }}
+        run: |
+          case "$DEPLOY_ENV" in
+            demo|production) ;;
+            *) echo "::error::DEPLOY_ENV must be demo or production"; exit 1 ;;
+          esac
+          repo_name="${GITHUB_REPOSITORY#*/}"
+          base="${PAGES_BASE_PATH:-/$repo_name/}"
+          if [[ "$repo_name" == *.github.io && -z "$PAGES_BASE_PATH" ]]; then
+            base="/"
+          fi
+          if [[ ! "$base" =~ ^/[A-Za-z0-9_./-]*$ || "$base" != */ || "$base" == *..* || "$base" == *//* ]]; then
+            echo "::error::PAGES_BASE_PATH must be a safe absolute path ending in /"
+            exit 1
+          fi
+          printf 'DEPLOY_ENV=%s\nVITE_BASE_PATH=%s\n' "$DEPLOY_ENV" "$base" >> "$GITHUB_ENV"
+      - name: Build explicit demonstration site
+        if: env.DEPLOY_ENV == 'demo'
+        run: npm run build
+        env:
+          VITE_APP_ENV: demo
+          VITE_DATA_MODE: mock
+      - name: Build production site with public Supabase configuration
+        if: env.DEPLOY_ENV == 'production'
+        run: npm run build:production
+        env:
+          VITE_APP_ENV: production
+          VITE_DATA_MODE: supabase
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      - name: Upload static assets only
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
+        with:
+          path: dist
+
+  deploy:
+    name: Publish Pages
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy validated artifact
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

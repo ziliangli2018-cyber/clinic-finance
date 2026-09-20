@@ -1,0 +1,8 @@
+{
+  "compilerOptions": { "strict": true, "lib": ["deno.window", "dom", "dom.iterable"] },
+  "tasks": {
+    "check": "deno check bank-sync/index.ts transaction-processing/index.ts receipt-processing/index.ts economic-data-sync/index.ts",
+    "test": "deno test _shared/provider.test.ts"
+  },
+  "imports": { "@supabase/supabase-js": "npm:@supabase/supabase-js@2.99.1" }
+}

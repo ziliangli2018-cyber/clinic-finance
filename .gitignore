@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+supabase/.env.local
+supabase/.temp/
+supabase/.branches/
+playwright-report/
+test-results/
+*.tsbuildinfo
+*.log
+.DS_Store
+.artifacts/

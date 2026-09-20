@@ -1,0 +1,51 @@
+project_id = "clinic-finance"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 10000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[studio]
+enabled = true
+port = 54323
+
+[local_smtp]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+file_size_limit = "10MiB"
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173", "http://127.0.0.1:5173"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false
+
+# JWTs are always validated against Auth by each handler's getUser call.
+# This supports projects using current asymmetric signing keys as well as local JWTs.
+[functions.bank-sync]
+verify_jwt = false
+[functions.transaction-processing]
+verify_jwt = false
+[functions.receipt-processing]
+verify_jwt = false
+[functions.economic-data-sync]
+verify_jwt = false
