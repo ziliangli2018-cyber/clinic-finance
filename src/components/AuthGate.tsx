@@ -5,6 +5,7 @@ import { ArrowRight, ChartNoAxesCombined, LockKeyhole } from 'lucide-react';
 import { isMock, supabase } from '../services/supabase';
 
 export function AuthGate({ children }: { children: ReactNode }) {
+  const allowSignup = import.meta.env.VITE_APP_ENV === 'development';
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(!isMock);
   const [mode, setMode] = useState<'login' | 'signup'>('login');
@@ -35,6 +36,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!supabase) return;
+    if (mode === 'signup' && !allowSignup) return;
     const form = new FormData(event.currentTarget);
     setBusy(true);
     setError('');
@@ -132,16 +134,20 @@ export function AuthGate({ children }: { children: ReactNode }) {
               <ArrowRight size={17} />
             </button>
           </form>
-          <button
-            className="text-button"
-            onClick={() => {
-              setMode(mode === 'login' ? 'signup' : 'login');
-              setError('');
-              setNotice('');
-            }}
-          >
-            {mode === 'login' ? 'New here? Create an account' : 'Already have an account? Sign in'}
-          </button>
+          {allowSignup && (
+            <button
+              className="text-button"
+              onClick={() => {
+                setMode(mode === 'login' ? 'signup' : 'login');
+                setError('');
+                setNotice('');
+              }}
+            >
+              {mode === 'login'
+                ? 'New here? Create an account'
+                : 'Already have an account? Sign in'}
+            </button>
+          )}
         </div>
       </section>
     </main>

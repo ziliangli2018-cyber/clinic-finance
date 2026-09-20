@@ -43,9 +43,13 @@ enable_confirmations = false
 # This supports projects using current asymmetric signing keys as well as local JWTs.
 [functions.bank-sync]
 verify_jwt = false
+import_map = "./functions/deno.json"
 [functions.transaction-processing]
 verify_jwt = false
+import_map = "./functions/deno.json"
 [functions.receipt-processing]
 verify_jwt = false
+import_map = "./functions/deno.json"
 [functions.economic-data-sync]
 verify_jwt = false
+import_map = "./functions/deno.json"

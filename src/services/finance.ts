@@ -59,7 +59,7 @@ export async function syncBank(organisationId: string) {
   const { error } = await supabase.functions.invoke('bank-sync', { body: { organisationId } });
   if (error)
     throw new Error(
-      `Bank sync failed. Check that local Edge Functions are running and mock data is enabled. ${error.message}`,
+      `Bank sync failed. Check the backend function deployment and demo data configuration. ${error.message}`,
     );
 }
 export async function saveCategory(transactionId: string, categoryId: string) {

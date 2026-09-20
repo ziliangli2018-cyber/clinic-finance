@@ -40,12 +40,12 @@ jobs:
       - name: Select deployment environment and asset base
         shell: bash
         env:
-          DEPLOY_ENV: ${{ vars.DEPLOY_ENV || 'demo' }}
+          DEPLOY_ENV: ${{ vars.DEPLOY_ENV || 'hosted-demo' }}
           PAGES_BASE_PATH: ${{ vars.PAGES_BASE_PATH }}
         run: |
           case "$DEPLOY_ENV" in
-            demo|production) ;;
-            *) echo "::error::DEPLOY_ENV must be demo or production"; exit 1 ;;
+            hosted-demo|production) ;;
+            *) echo "::error::DEPLOY_ENV must be hosted-demo or production; Pages always requires Supabase sign-in"; exit 1 ;;
           esac
           repo_name="${GITHUB_REPOSITORY#*/}"
           base="${PAGES_BASE_PATH:-/$repo_name/}"
@@ -57,12 +57,14 @@ jobs:
             exit 1
           fi
           printf 'DEPLOY_ENV=%s\nVITE_BASE_PATH=%s\n' "$DEPLOY_ENV" "$base" >> "$GITHUB_ENV"
-      - name: Build explicit demonstration site
-        if: env.DEPLOY_ENV == 'demo'
-        run: npm run build
+      - name: Build authenticated demonstration site
+        if: env.DEPLOY_ENV == 'hosted-demo'
+        run: npm run build:hosted-demo
         env:
           VITE_APP_ENV: demo
-          VITE_DATA_MODE: mock
+          VITE_DATA_MODE: supabase
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
       - name: Build production site with public Supabase configuration
         if: env.DEPLOY_ENV == 'production'
         run: npm run build:production

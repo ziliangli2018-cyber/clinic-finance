@@ -25,13 +25,13 @@ npm run build
 npm run preview
 ```
 
-`npm run build` creates an explicit **demo** in `dist/`. `npm run build:production` requires the public configuration of a Supabase project and disallows mock mode. A build alone never establishes a live bank integration.
+`npm run build` creates an explicit **local browser demo** in `dist/`. The Pages workflow cannot publish that unauthenticated mode. `npm run build:hosted-demo` requires hosted Supabase configuration and email/password sign-in while the backend serves fictitious records. `npm run build:production` also requires Supabase and disallows mock ingestion. A build alone never establishes a live bank integration.
 
 ## Local Supabase and deployment
 
-The selected backend setup is **local Supabase**. Docker and the Supabase CLI are needed only for that mode and database tests. See [local setup and GitHub Pages deployment](docs/deployment.md) for the exact commands, public environment variables, and the later hosted-backend route.
+Local Supabase is available for development. The published application uses a separate hosted Supabase project for authentication, private database access and trusted mock ingestion. See [setup and deployment](docs/deployment.md) for the exact commands and environment variables.
 
-The repository is [**private**](https://github.com/ziliangli2018-cyber/clinic-finance). GitHub rejected Pages setup on the current plan, so the site has not been published. To publish while retaining repository privacy, enable a supported GitHub plan, select GitHub Actions in Pages settings, then rerun the deployment workflow. A private repository does not itself make the website private. The demo contains invented data. See the [GitHub Pages access requirements](docs/deployment.md#private-repository-and-site-visibility).
+The repository is [**public**](https://github.com/ziliangli2018-cyber/clinic-finance), as requested for GitHub Pages hosting. Source code, history and fictitious test fixtures are public. Application records remain in Supabase behind sign-in, organisation membership and row-level security. Pages deployment fails if hosted Supabase configuration is missing; it never publishes an unauthenticated fallback or an embedded shared password. Public self-registration is hidden in hosted builds and must also be disabled in the hosted Supabase Auth settings. Local development still supports signup for testing.
 
 ## What is implemented and what comes later
 

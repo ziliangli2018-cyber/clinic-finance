@@ -17,6 +17,10 @@ This is an early functional foundation, not a production security certification.
 
 ## Deployment configuration
 
+The source repository is public. The GitHub Pages workflow only supports `hosted-demo` or `production`, both of which require an HTTPS Supabase endpoint and public project key. Signed-out visitors see a sign-in screen; no financial data is loaded before authentication. The local browser-only demo is never a Pages deployment option. Hosting configuration errors stop the build instead of bypassing sign-in. Do not put a shared password, password hash, access token or private records in source code or a frontend build variable.
+
+Hosted builds do not offer public registration. Disable new-user signup in the hosted Supabase Auth service as well; hiding the form alone is not an access control. Provision the owner's account through the Supabase administration flow and let the owner set their own password. Organisation membership and RLS still enforce record access even if an unrecognised account were created. Keep real financial data out of the separate hosted demo project.
+
 `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are public client configuration. They are safe to ship only because RLS and server authorization enforce access. The service-role key bypasses RLS and must never appear in `VITE_*`, static bundles, checked-in files, browser storage, logs or screenshots. Keep future bank/OCR provider secrets in backend secret storage.
 
 Use a dedicated Supabase project for demo data and a different project for production. Apply only migrations to production; local `seed.sql` explicitly enables mock mode and must not be applied there. Keep the production runtime config at its migration defaults and set Edge `APP_ENV=production`, `ALLOW_MOCK_DATA=false`. Limit `CORS_ALLOWED_ORIGINS` to the actual deployed frontend origin. Configure Supabase Auth Site URL and redirect allowlist for the deployed frontend; hash routes do not need broad wildcard URL allowances.

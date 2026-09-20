@@ -1,6 +1,7 @@
 export function validatePublicConfig(
   env: Record<string, string | undefined>,
   productionBuild = false,
+  hostedBuild = false,
 ) {
   const appEnv = env.VITE_APP_ENV || 'development';
   const mode = env.VITE_DATA_MODE || 'mock';
@@ -11,6 +12,8 @@ export function validatePublicConfig(
     throw new Error('Production builds require VITE_APP_ENV=production');
   if (appEnv === 'production' && mode !== 'supabase')
     throw new Error('Production forbids mock data');
+  if (hostedBuild && (appEnv !== 'demo' || mode !== 'supabase'))
+    throw new Error('Hosted demo builds require Supabase sign-in');
   for (const key of Object.keys(env)) {
     if (
       key.startsWith('VITE_') &&
@@ -44,8 +47,8 @@ export function validatePublicConfig(
       throw new Error('Invalid public Supabase URL');
     if (!publicKey.startsWith('sb_publishable_') && publicKey.split('.').length !== 3)
       throw new Error('Use a Supabase publishable key or anon JWT');
-    if (appEnv === 'production' && url.protocol !== 'https:')
-      throw new Error('Production Supabase requires HTTPS');
+    if ((appEnv === 'production' || hostedBuild) && url.protocol !== 'https:')
+      throw new Error('Hosted Supabase requires HTTPS');
   }
   const base = env.VITE_BASE_PATH || '/';
   if (!base.startsWith('/') || !base.endsWith('/') || base.includes('..') || base.includes('//'))

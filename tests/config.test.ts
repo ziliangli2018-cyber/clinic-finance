@@ -9,6 +9,19 @@ const production = {
   VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',
 };
 describe('deployment configuration boundary', () => {
+  it('requires HTTPS Supabase configuration for the password-protected hosted demo', () => {
+    const hosted = { ...production, VITE_APP_ENV: 'demo' };
+    expect(validatePublicConfig(hosted, false, true).mode).toBe('supabase');
+    expect(() =>
+      validatePublicConfig({ ...hosted, VITE_DATA_MODE: 'mock' }, false, true),
+    ).toThrow();
+    expect(() =>
+      validatePublicConfig({ ...hosted, VITE_SUPABASE_URL: 'http://127.0.0.1:54321' }, false, true),
+    ).toThrow();
+    expect(() =>
+      validatePublicConfig({ ...hosted, VITE_SUPABASE_PUBLISHABLE_KEY: '' }, false, true),
+    ).toThrow();
+  });
   it('allows an explicit browser demo and valid production public settings', () => {
     expect(validatePublicConfig({ VITE_APP_ENV: 'demo', VITE_DATA_MODE: 'mock' }).mode).toBe(
       'mock',

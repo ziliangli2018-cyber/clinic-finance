@@ -7,7 +7,7 @@ export default defineConfig(({ mode }) => {
     ...loadEnv(mode, process.cwd(), 'VITE_'),
     ...Object.fromEntries(Object.entries(process.env).filter(([key]) => key.startsWith('VITE_'))),
   };
-  validatePublicConfig(env, mode === 'production');
+  validatePublicConfig(env, mode === 'production', mode === 'hosted-demo');
   return {
     plugins: [react()],
     base: env.VITE_BASE_PATH || '/',

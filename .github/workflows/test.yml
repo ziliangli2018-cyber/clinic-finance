@@ -45,6 +45,15 @@ jobs:
           VITE_BASE_PATH: /clinic-finance/
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - name: Build authenticated hosted demo for sign-in checks
+        run: npm run build:hosted-demo
+        env:
+          VITE_APP_ENV: demo
+          VITE_DATA_MODE: supabase
+          VITE_BASE_PATH: /clinic-finance/
+          VITE_SUPABASE_URL: https://ci-example.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_build_placeholder
+      - run: npm run test:e2e:auth
 
   backend:
     name: Database and Edge Function checks
