@@ -31,18 +31,18 @@ npm run preview
 
 The selected backend setup is **local Supabase**. Docker and the Supabase CLI are needed only for that mode and database tests. See [local setup and GitHub Pages deployment](docs/deployment.md) for the exact commands, public environment variables, and the later hosted-backend route.
 
-The intended repository is **private**. GitHub Pages from a private repository requires a supported paid GitHub plan, and a private repository does not itself make the website private. The demo is suitable for public viewing because it contains invented data. See the [GitHub Pages access requirements](docs/deployment.md#private-repository-and-site-visibility).
+The repository is [**private**](https://github.com/ziliangli2018-cyber/clinic-finance). GitHub rejected Pages setup on the current plan, so the site has not been published. To publish while retaining repository privacy, enable a supported GitHub plan, select GitHub Actions in Pages settings, then rerun the deployment workflow. A private repository does not itself make the website private. The demo contains invented data. See the [GitHub Pages access requirements](docs/deployment.md#private-repository-and-site-visibility).
 
 ## What is implemented and what comes later
 
-| Version 0.1 | Future modules |
-| --- | --- |
-| Dashboard, accounts, transactions and analytics | Live Basiq/Open Banking consent and synchronisation |
-| Categorisation rules and manual category updates | Receipt ingestion, OCR and invoice matching |
-| Internal-transfer matching foundations | Cash-flow forecasting, budgets and accounting |
-| Supabase Auth, organisation membership and RLS | Payroll and practice-management integrations |
-| Mock provider, protected backend sync and audit foundations | Scheduled jobs and economic time series |
-| Static Pages builds and CI | AI explanations of approved deterministic queries |
+| Version 0.1                                                 | Future modules                                      |
+| ----------------------------------------------------------- | --------------------------------------------------- |
+| Dashboard, accounts, transactions and analytics             | Live Basiq/Open Banking consent and synchronisation |
+| Categorisation rules and manual category updates            | Receipt ingestion, OCR and invoice matching         |
+| Internal-transfer matching foundations                      | Cash-flow forecasting, budgets and accounting       |
+| Supabase Auth, organisation membership and RLS              | Payroll and practice-management integrations        |
+| Mock provider, protected backend sync and audit foundations | Scheduled jobs and economic time series             |
+| Static Pages builds and CI                                  | AI explanations of approved deterministic queries   |
 
 Future endpoint placeholders return an explicit unavailable response; they do not perform OCR, economic-data imports or other unimplemented integrations. The [roadmap](docs/roadmap.md) describes the prerequisites for enabling them.
 

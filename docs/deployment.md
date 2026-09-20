@@ -80,6 +80,10 @@ deno task --config supabase/functions/deno.json check
 
 The Deno command requires Deno 2. Database tests exercise tenant access and supported write paths. A passing TypeScript check alone does not verify RLS. See the official [Supabase testing guide](https://supabase.com/docs/guides/local-development/cli/testing-and-linting) for how the pgTAP runner works.
 
+With local Edge Functions running, `npm run test:integration` exercises real Auth, onboarding, sync retries, manual category preservation and cross-tenant rejection. It reads local public config from `.env.local`. With `npm run dev` also running on port 5173, `npm run test:local-ui` tests signup, onboarding, sync, session persistence and sign-out in Chromium. Run `npx playwright install chromium` first. Both tests create fictitious local users and organisations; they refuse hosted backend URLs.
+
+For static browser checks, build with `VITE_BASE_PATH=/clinic-finance/` and run `npm run test:e2e`. CI performs this automatically. These checks include mobile rendering, filters, categorisation, account links and refresh at a repository subpath.
+
 To stop the local services:
 
 ```sh
@@ -125,10 +129,10 @@ The demo contains only invented records. For a future production site, all bundl
 
 ## Workflow behaviour
 
-| Workflow | Trigger | Result |
-| --- | --- | --- |
-| `test.yml` | Pull requests targeting `main`, or reusable call from deployment | Node 24 install, type checking, linting, unit tests, demo and production compilation, Deno check, fresh local Supabase migration and database tests |
-| `deploy-pages.yml` | Push to `main` or manual run on `main` | Calls the complete validation workflow, builds the selected environment, uploads only `dist/` and publishes to Pages |
+| Workflow           | Trigger                                                          | Result                                                                                                                                              |
+| ------------------ | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `test.yml`         | Pull requests targeting `main`, or reusable call from deployment | Node 24 install, type checking, linting, unit tests, demo and production compilation, Deno check, fresh local Supabase migration and database tests |
+| `deploy-pages.yml` | Push to `main` or manual run on `main`                           | Calls the complete validation workflow, builds the selected environment, uploads only `dist/` and publishes to Pages                                |
 
 Validation jobs have repository read access only and use an isolated local database with invented test records. The production compilation check uses a synthetic public project URL/key and does not contact a hosted backend or deploy its output. Build metadata access adds `pages: read`. Only the final deployment job receives `pages: write` and `id-token: write`. Checkout does not persist credentials. Actions are pinned to commit SHAs; Dependabot proposes dependency and action updates.
 
@@ -136,17 +140,17 @@ The workflow follows the official [GitHub Pages custom workflow requirements](ht
 
 ## Public configuration and secrets
 
-| Setting | Location | Purpose |
-| --- | --- | --- |
-| `VITE_APP_ENV` | Frontend build | `development`, `demo` or `production` |
-| `VITE_DATA_MODE` | Frontend build | `mock` or `supabase`; production requires Supabase |
-| `VITE_SUPABASE_URL` | Frontend public variable | Supabase project endpoint |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Frontend public variable | Public/publishable or legacy anon key |
-| `VITE_BASE_PATH` | Frontend build | Asset path with leading and trailing `/` |
-| `DEPLOY_ENV` | GitHub repository variable | `demo` or `production`; default `demo` |
-| `PAGES_BASE_PATH` | GitHub repository variable | Optional override for generated asset path |
-| `APP_ENV`, `ALLOW_MOCK_DATA`, `CORS_ALLOWED_ORIGINS` | Edge Function environment | Backend mode and accepted browser origins |
-| Supabase service-role key and all provider/API credentials | Trusted backend environment only | Privileged server operations |
+| Setting                                                    | Location                         | Purpose                                            |
+| ---------------------------------------------------------- | -------------------------------- | -------------------------------------------------- |
+| `VITE_APP_ENV`                                             | Frontend build                   | `development`, `demo` or `production`              |
+| `VITE_DATA_MODE`                                           | Frontend build                   | `mock` or `supabase`; production requires Supabase |
+| `VITE_SUPABASE_URL`                                        | Frontend public variable         | Supabase project endpoint                          |
+| `VITE_SUPABASE_PUBLISHABLE_KEY`                            | Frontend public variable         | Public/publishable or legacy anon key              |
+| `VITE_BASE_PATH`                                           | Frontend build                   | Asset path with leading and trailing `/`           |
+| `DEPLOY_ENV`                                               | GitHub repository variable       | `demo` or `production`; default `demo`             |
+| `PAGES_BASE_PATH`                                          | GitHub repository variable       | Optional override for generated asset path         |
+| `APP_ENV`, `ALLOW_MOCK_DATA`, `CORS_ALLOWED_ORIGINS`       | Edge Function environment        | Backend mode and accepted browser origins          |
+| Supabase service-role key and all provider/API credentials | Trusted backend environment only | Privileged server operations                       |
 
 Every `VITE_*` value must be treated as public, even if entered in a GitHub “secret” field. Vite embeds frontend values in downloadable assets. CORS restricts browser origins; authentication, membership checks and RLS still enforce access.
 
@@ -180,15 +184,15 @@ No route or component rewrite is required. If using private Enterprise Pages, us
 
 ## Common problems
 
-| Symptom | Check |
-| --- | --- |
-| Pages configuration or deployment returns 404/403 | Pages enabled, Actions source selected, private-repository plan eligible, `github-pages` environment permits `main` |
-| Interface loads without styling or scripts | `PAGES_BASE_PATH` matches the published site and ends in `/`; rebuild after changing it |
-| Refresh fails | Use the generated hash route and the correct repository base, not a server-style `/transactions` path |
-| Supabase UI shows an error instead of demo data | Check local services, frontend public URL/key, authentication session and Edge Function logs; Supabase mode deliberately has no mock fallback |
-| Mock sync is rejected | Non-production backend mode, explicit mock flag, database runtime settings, demo organisation and editor membership all required |
-| Local function request fails CORS | Exact origin, including port, is in `CORS_ALLOWED_ORIGINS`; restart function serving after changes |
-| Production build refuses to run | Supply the public Supabase URL/key and use Supabase mode; do not enable mocks to bypass the check |
-| Local Supabase cannot start | Docker running, sufficient disk space and the configured ports available |
+| Symptom                                           | Check                                                                                                                                         |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pages configuration or deployment returns 404/403 | Pages enabled, Actions source selected, private-repository plan eligible, `github-pages` environment permits `main`                           |
+| Interface loads without styling or scripts        | `PAGES_BASE_PATH` matches the published site and ends in `/`; rebuild after changing it                                                       |
+| Refresh fails                                     | Use the generated hash route and the correct repository base, not a server-style `/transactions` path                                         |
+| Supabase UI shows an error instead of demo data   | Check local services, frontend public URL/key, authentication session and Edge Function logs; Supabase mode deliberately has no mock fallback |
+| Mock sync is rejected                             | Non-production backend mode, explicit mock flag, database runtime settings, demo organisation and editor membership all required              |
+| Local function request fails CORS                 | Exact origin, including port, is in `CORS_ALLOWED_ORIGINS`; restart function serving after changes                                            |
+| Production build refuses to run                   | Supply the public Supabase URL/key and use Supabase mode; do not enable mocks to bypass the check                                             |
+| Local Supabase cannot start                       | Docker running, sufficient disk space and the configured ports available                                                                      |
 
 Scheduled bank refresh, receipt workers and economic imports are not enabled in this release. Add them as trusted backend jobs with retries and audit records; never rely on an open browser tab to run them.

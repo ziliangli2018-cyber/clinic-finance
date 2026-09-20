@@ -4,20 +4,20 @@ Version 0.1 uses Supabase Auth, Postgres and Edge Functions. Apply migrations in
 
 ## Data model
 
-| Table | Purpose and access |
-| --- | --- |
-| `organisations`, `organisation_members` | Tenant and owner/admin/viewer membership. Members see their organisation and their own membership row. |
-| `entities` | Clinics and personal entities within one tenant. |
-| `bank_connections`, `accounts` | Normalised provider connections and account snapshots. |
-| `transactions` | Integer AUD cents, positive inflows and negative outflows, date-only posting date, category provenance and optional transfer pair. |
-| `categories` | Global, authenticated-readable category catalogue. Browser writes prohibited. |
-| `audit_events` | Append-only from application RPCs; visible to tenant owners/admins. |
-| `processing_jobs` | Tenant-readable processing status foundation. Mock sync writes successful jobs atomically. |
-| `receipts` | Future extraction/matching metadata; tenant scoped. Upload and extraction are not implemented. |
-| `economic_indicators` | Global authenticated-readable observations foundation; no live economic data in 0.1. |
-| `forecast_scenarios` | Tenant-scoped future assumptions foundation; no production forecasting service. |
-| `private.provider_records` | Raw provider evidence, unavailable to browsers and the public REST schema. |
-| `private.runtime_config` | Server-controlled deployment environment and mock enablement. |
+| Table                                   | Purpose and access                                                                                                                 |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `organisations`, `organisation_members` | Tenant and owner/admin/viewer membership. Members see their organisation and their own membership row.                             |
+| `entities`                              | Clinics and personal entities within one tenant.                                                                                   |
+| `bank_connections`, `accounts`          | Normalised provider connections and account snapshots.                                                                             |
+| `transactions`                          | Integer AUD cents, positive inflows and negative outflows, date-only posting date, category provenance and optional transfer pair. |
+| `categories`                            | Global, authenticated-readable category catalogue. Browser writes prohibited.                                                      |
+| `audit_events`                          | Append-only from application RPCs; visible to tenant owners/admins.                                                                |
+| `processing_jobs`                       | Tenant-readable processing status foundation. Mock sync writes successful jobs atomically.                                         |
+| `receipts`                              | Future extraction/matching metadata; tenant scoped. Upload and extraction are not implemented.                                     |
+| `economic_indicators`                   | Global authenticated-readable observations foundation; no live economic data in 0.1.                                               |
+| `forecast_scenarios`                    | Tenant-scoped future assumptions foundation; no production forecasting service.                                                    |
+| `private.provider_records`              | Raw provider evidence, unavailable to browsers and the public REST schema.                                                         |
+| `private.runtime_config`                | Server-controlled deployment environment and mock enablement.                                                                      |
 
 Every application table has RLS. Browser grants permit only SELECT; no broad financial INSERT/UPDATE/DELETE policies exist. Organisation-owned references include the organisation identifier in composite foreign keys. An account also references the connection's entity, preventing an account from attaching to another entity's connection even inside the same organisation. Monetary values use `bigint` and are bounded to JavaScript's exact integer range. Browser adapters must retain integer cents.
 
@@ -35,12 +35,12 @@ Transaction uniqueness is `(organisation_id, account_id, provider_transaction_id
 
 All accept `POST` with JSON `{ "organisationId": "UUID" }`, an authenticated user JWT in `Authorization: Bearer …`, and the project's public API key. The handler validates the JWT through Supabase Auth `getUser()` and checks owner/admin membership before acting. OPTIONS handles CORS only. No data work occurs during preflight. Configuration uses `verify_jwt=false` because handlers explicitly validate user tokens, including current asymmetric signing-key tokens; this is not unauthenticated access.
 
-| Endpoint | Version 0.1 behavior |
-| --- | --- |
-| `bank-sync` | Provisions/syncs deterministic mock data for eligible demo tenants; returns `{ syncedAccounts, syncedTransactions, provider, jobId }`. |
-| `transaction-processing` | Authenticated/authorised HTTP 501; no processing performed. |
-| `receipt-processing` | Authenticated/authorised HTTP 501; no upload, extraction or matching performed. |
-| `economic-data-sync` | Authenticated/authorised HTTP 501; no external data fetched. |
+| Endpoint                 | Version 0.1 behavior                                                                                                                   |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `bank-sync`              | Provisions/syncs deterministic mock data for eligible demo tenants; returns `{ syncedAccounts, syncedTransactions, provider, jobId }`. |
+| `transaction-processing` | Authenticated/authorised HTTP 501; no processing performed.                                                                            |
+| `receipt-processing`     | Authenticated/authorised HTTP 501; no upload, extraction or matching performed.                                                        |
+| `economic-data-sync`     | Authenticated/authorised HTTP 501; no external data fetched.                                                                           |
 
 ## Local operation and tests
 

@@ -11,7 +11,8 @@ export function dateValue(value: string): number {
 
 export function shiftDate(value: string, days: number): string {
   const parsed = dateValue(value);
-  if (!Number.isFinite(parsed) || !Number.isInteger(days)) throw new Error('A valid ledger date and whole day offset are required.');
+  if (!Number.isFinite(parsed) || !Number.isInteger(days))
+    throw new Error('A valid ledger date and whole day offset are required.');
   return new Date(parsed + days * DAY_MS).toISOString().slice(0, 10);
 }
 

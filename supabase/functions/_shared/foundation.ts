@@ -9,7 +9,12 @@ export function foundationHandler(feature: string) {
       const context = await authenticate(request);
       const organisationId = await organisationIdFrom(request);
       await authoriseEditor(context, organisationId);
-      return response(request, 501, { error: `${feature} is planned for a future release; no processing was performed.`, implemented: false });
-    } catch (error) { return failure(request, error); }
+      return response(request, 501, {
+        error: `${feature} is planned for a future release; no processing was performed.`,
+        implemented: false,
+      });
+    } catch (error) {
+      return failure(request, error);
+    }
   };
 }

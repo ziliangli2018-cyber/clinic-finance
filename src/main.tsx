@@ -5,4 +5,12 @@ import { AuthGate } from './components/AuthGate';
 import { App } from './App';
 import './styles.css';
 
-ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><HashRouter><AuthGate><App/></AuthGate></HashRouter></React.StrictMode>);
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <HashRouter>
+      <AuthGate>
+        <App />
+      </AuthGate>
+    </HashRouter>
+  </React.StrictMode>,
+);

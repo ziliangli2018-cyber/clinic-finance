@@ -31,12 +31,12 @@ GitHub Actions validates and deploys frontend assets. It has no banking or produ
 
 ## Two data modes
 
-| Mode | Data source | Authentication | Intended use |
-| --- | --- | --- | --- |
-| `development/mock` | Deterministic fictitious dataset in the browser | No backend session | Immediate local UI development |
-| `demo/mock` | Same labelled fictitious dataset | No backend session | Shareable static demo |
-| `development/supabase` | Local Postgres via Auth/RLS and Edge Functions | Local Supabase user | Integration and access testing |
-| `production/supabase` | Hosted Postgres via Auth/RLS and Edge Functions | Supabase user | Future production deployment, initially empty until authorised data ingestion exists |
+| Mode                   | Data source                                     | Authentication      | Intended use                                                                         |
+| ---------------------- | ----------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------ |
+| `development/mock`     | Deterministic fictitious dataset in the browser | No backend session  | Immediate local UI development                                                       |
+| `demo/mock`            | Same labelled fictitious dataset                | No backend session  | Shareable static demo                                                                |
+| `development/supabase` | Local Postgres via Auth/RLS and Edge Functions  | Local Supabase user | Integration and access testing                                                       |
+| `production/supabase`  | Hosted Postgres via Auth/RLS and Edge Functions | Supabase user       | Future production deployment, initially empty until authorised data ingestion exists |
 
 Mock mode is a separate development adapter, not a database replacement. Supabase mode does not silently fall back to fictitious data on an error. Production builds require public Supabase configuration, disallow mock mode and exclude mock data from the frontend bundle. Backend demo provisioning separately requires a non-production environment, an explicit mock-data flag and a demo organisation.
 
