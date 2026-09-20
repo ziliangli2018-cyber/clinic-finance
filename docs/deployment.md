@@ -80,7 +80,7 @@ deno task --config supabase/functions/deno.json check
 
 The Deno command requires Deno 2. Database tests exercise tenant access and supported write paths. A passing TypeScript check alone does not verify RLS. See the official [Supabase testing guide](https://supabase.com/docs/guides/local-development/cli/testing-and-linting) for how the pgTAP runner works.
 
-With local Edge Functions running, `npm run test:integration` exercises real Auth, onboarding, sync retries, manual category preservation and cross-tenant rejection. It reads local public config from `.env.local`. With `npm run dev` also running on port 5173, `npm run test:local-ui` tests signup, onboarding, sync, session persistence and sign-out in Chromium. Run `npx playwright install chromium` first. Both tests create fictitious local users and organisations; they refuse hosted backend URLs.
+With local Edge Functions running, `npm run test:integration` exercises real Auth, onboarding, sync retries, manual category preservation and cross-tenant rejection. It reads the same development public configuration as Vite, including `.env.development.local`. With `npm run dev` also running on port 5173, `npm run test:local-ui` tests signup, onboarding, sync, session persistence and sign-out in Chromium. Run `npx playwright install chromium` first. Both tests create fictitious local users and organisations; they refuse hosted backend URLs.
 
 For static browser checks, build with `VITE_BASE_PATH=/clinic-finance/` and run `npm run test:e2e`. CI performs this automatically. These checks include mobile rendering, filters, categorisation, account links and refresh at a repository subpath.
 
