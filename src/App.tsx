@@ -23,10 +23,14 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  Pause,
+  Play,
   RefreshCw,
+  RotateCcw,
   Search,
   Settings2,
   ShieldCheck,
+  Sparkles,
   SlidersHorizontal,
   Wallet,
   X,
@@ -44,6 +48,7 @@ import {
 import { useFinance } from './hooks/useFinance';
 import { isMock, isProduction, supabase } from './services/supabase';
 import { csvCell } from './utils/csv';
+import { CashflowForecast } from './components/CashflowForecast';
 
 type FinanceState = ReturnType<typeof useFinance>;
 const isoToday = () =>
@@ -69,12 +74,18 @@ export function App() {
     ? 'Transactions'
     : location.pathname.startsWith('/accounts')
       ? 'Accounts'
-      : location.pathname.startsWith('/analytics')
-        ? 'Analytics'
-        : location.pathname.startsWith('/settings')
-          ? 'Workspace'
-          : 'Overview';
-  const to = data?.organisation.isDemo ? '2026-09-20' : isoToday();
+      : location.pathname.startsWith('/forecast')
+        ? 'Forecast'
+        : location.pathname.startsWith('/analytics')
+          ? 'Analytics'
+          : location.pathname.startsWith('/settings')
+            ? 'Workspace'
+            : 'Overview';
+  const demoAsOf = data?.transactions
+    .map((transaction) => transaction.postedAt)
+    .sort()
+    .at(-1);
+  const to = data?.organisation.isDemo ? demoAsOf || '2026-09-20' : isoToday();
   const fromDate = new Date(`${to}T00:00:00Z`);
   fromDate.setUTCDate(fromDate.getUTCDate() - days + 1);
   const validEntityId = data?.entities.some((entity) => entity.id === entityId) ? entityId : 'all';
@@ -123,6 +134,10 @@ export function App() {
             <Wallet size={19} />
             Accounts
           </NavLink>
+          <NavLink to="/forecast">
+            <Sparkles size={19} />
+            Forecast
+          </NavLink>
           <NavLink to="/analytics">
             <ChartNoAxesCombined size={19} />
             Analytics
@@ -152,7 +167,7 @@ export function App() {
             <span>CF</span>
             <div>
               <strong>{isMock ? 'Demo workspace' : 'Signed in securely'}</strong>
-              <small>Version 0.1</small>
+              <small>Version 0.2</small>
             </div>
             {!isMock && (
               <button
@@ -199,9 +214,11 @@ export function App() {
                     ? 'Every movement, organised and easy to find.'
                     : pageTitle === 'Accounts'
                       ? 'Your connected accounts, in one place.'
-                      : pageTitle === 'Analytics'
-                        ? 'Understand the patterns behind your cash flow.'
-                        : 'Manage your organisation and data connections.'}
+                      : pageTitle === 'Forecast'
+                        ? 'See how recurring movements and recent spending may shape your cash position.'
+                        : pageTitle === 'Analytics'
+                          ? 'Understand the patterns behind your cash flow.'
+                          : 'Manage your organisation and data connections.'}
               </p>
             </div>
             {data && (
@@ -209,17 +226,14 @@ export function App() {
                 className="button secondary"
                 disabled={finance.busy || (isProduction && !isMock)}
                 onClick={() => void finance.sync()}
-                title={
-                  isProduction
-                    ? 'Live banking is available in a future release'
-                    : 'Refresh mock provider data'
-                }
+                title={isMock ? 'Generate the next fictitious activity update' : 'Refresh data'}
               >
                 <RefreshCw size={16} className={finance.busy ? 'spin' : ''} />
-                {finance.busy ? 'Refreshing…' : 'Refresh data'}
+                {finance.busy ? 'Updating…' : isMock ? 'Simulate update' : 'Refresh data'}
               </button>
             )}
           </div>
+          {data && isMock && <DemoNotice finance={finance} />}
           {error && (
             <div role="alert" className="error-box">
               {error}
@@ -280,6 +294,7 @@ export function App() {
                   element={<Transactions data={data} scope={scope} finance={finance} />}
                 />
                 <Route path="/accounts" element={<Accounts data={data} scope={scope} />} />
+                <Route path="/forecast" element={<CashflowForecast data={data} scope={scope} />} />
                 <Route path="/analytics" element={<Analytics data={data} scope={scope} />} />
                 <Route path="/settings" element={<Workspace finance={finance} />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
@@ -287,12 +302,12 @@ export function App() {
               <footer className="page-footer">
                 <span>
                   {data.organisation.isDemo
-                    ? 'Fictitious data · 20 September 2026'
+                    ? `Fictitious data · ${dateLabel(to, { day: 'numeric', month: 'long', year: 'numeric' })}`
                     : 'Secure organisation workspace'}{' '}
                   · All amounts in AUD
                 </span>
                 <span>
-                  Clinic Finance <span className="footer-version">0.1</span>
+                  Clinic Finance <span className="footer-version">0.2</span>
                 </span>
               </footer>
             </>
@@ -300,6 +315,48 @@ export function App() {
         </main>
       </div>
     </div>
+  );
+}
+
+function DemoNotice({ finance }: { finance: FinanceState }) {
+  const updated = finance.lastUpdatedAt
+    ? new Intl.DateTimeFormat('en-AU', {
+        hour: 'numeric',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZone: 'Australia/Brisbane',
+      }).format(new Date(finance.lastUpdatedAt))
+    : 'ready';
+  return (
+    <section className="demo-notice" aria-label="Demonstration mode">
+      <span className="demo-notice-icon">
+        <Sparkles size={20} />
+      </span>
+      <div className="demo-notice-copy">
+        <strong>Live demo · fictional data only</strong>
+        <p>
+          No bank is connected and no credentials are requested. Changes stay in this browser. For
+          demonstration only — not financial advice.
+        </p>
+        <span className="demo-live-status" role="status" aria-live="polite">
+          <i className={finance.simulationPaused ? 'paused' : ''} />
+          {finance.simulationPaused
+            ? 'Simulation paused'
+            : `Simulation active · updated ${updated}`}
+          {finance.simulationMessage ? ` · ${finance.simulationMessage}` : ''}
+        </span>
+      </div>
+      <div className="demo-notice-actions">
+        <button className="button tertiary" onClick={finance.toggleSimulation}>
+          {finance.simulationPaused ? <Play size={15} /> : <Pause size={15} />}
+          {finance.simulationPaused ? 'Resume' : 'Pause'}
+        </button>
+        <button className="button tertiary" onClick={finance.resetDemo}>
+          <RotateCcw size={15} />
+          Reset demo
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -383,16 +440,25 @@ function Dashboard({
     .sort((a, b) => b.postedAt.localeCompare(a.postedAt))
     .slice(0, 5);
   const accounts = scopedAccounts(data, scope);
-  const cash = accounts
-    .filter((account) => account.kind !== 'credit_card')
-    .reduce((sum, account) => sum + account.balanceCents, 0);
+  const cashAccounts = accounts.filter((account) => account.kind !== 'credit_card');
+  const cashAccountIds = new Set(cashAccounts.map((account) => account.id));
+  const cash = cashAccounts.reduce((sum, account) => sum + account.balanceCents, 0);
+  const pendingOutflows = data.transactions
+    .filter(
+      (transaction) =>
+        transaction.status === 'pending' &&
+        transaction.amountCents < 0 &&
+        cashAccountIds.has(transaction.accountId),
+    )
+    .reduce((sum, transaction) => sum - transaction.amountCents, 0);
+  const availableCash = cash - pendingOutflows;
   return (
     <>
       <div className="metric-grid">
         <Metric
-          label="Cash balance"
-          value={formatMoney(cash)}
-          caption={`${accounts.filter((account) => account.kind !== 'credit_card').length} cash accounts · latest balances`}
+          label="Available cash"
+          value={formatMoney(availableCash)}
+          caption={`${formatMoney(cash)} current · ${formatMoney(pendingOutflows)} pending out`}
           icon={<Wallet size={19} />}
           primary
         />
@@ -678,7 +744,7 @@ function TransactionTable({
             const category = data.categories.find((item) => item.id === transaction.categoryId);
             return (
               <tr key={transaction.id}>
-                <td>
+                <td data-label="Transaction">
                   <div className="transaction-name">
                     <span
                       className={`transaction-icon ${transaction.amountCents > 0 ? 'incoming' : ''}`}
@@ -707,22 +773,27 @@ function TransactionTable({
                     </div>
                   </div>
                 </td>
-                <td>
+                <td data-label="Account">
                   <span className="account-label">{account?.name}</span>
                 </td>
-                <td>
+                <td data-label="Category">
                   <span className={`category-tag ${!category ? 'uncategorised' : ''}`}>
                     <i style={{ background: category?.colour || '#bc8740' }} />
                     {category?.name || 'Uncategorised'}
                   </span>
                 </td>
-                <td className="nowrap muted">{dateLabel(transaction.postedAt)}</td>
-                <td className={`number amount ${transaction.amountCents > 0 ? 'positive' : ''}`}>
+                <td data-label="Date" className="nowrap muted">
+                  {dateLabel(transaction.postedAt)}
+                </td>
+                <td
+                  data-label="Amount"
+                  className={`number amount ${transaction.amountCents > 0 ? 'positive' : ''}`}
+                >
                   {transaction.amountCents > 0 ? '+' : '−'}
                   {formatMoney(Math.abs(transaction.amountCents))}
                 </td>
                 {onSelect && (
-                  <td>
+                  <td className="transaction-action">
                     <button
                       className="icon-button"
                       aria-label={`Review ${transaction.description}`}
@@ -770,6 +841,8 @@ function Transactions({
   };
   const [page, setPage] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const review = params.get('review') || 'all';
   const selected = data.transactions.find((transaction) => transaction.id === selectedId);
   const transactions = filterTransactions(data, { ...scope, accountId })
@@ -779,6 +852,8 @@ function Transactions({
           (review === 'uncategorised' && !transaction.categoryId) ||
           (review === 'receipts' && transaction.receiptStatus === 'missing') ||
           (review === 'transfers' && transaction.transferPairId)) &&
+        (categoryFilter === 'all' || transaction.categoryId === categoryFilter) &&
+        (statusFilter === 'all' || transaction.status === statusFilter) &&
         `${transaction.description} ${transaction.merchant || ''}`
           .toLowerCase()
           .includes(search.toLowerCase()),
@@ -788,26 +863,37 @@ function Transactions({
   function exportCsv() {
     const safe = csvCell;
     const csv = [
-      'Date,Description,Account,Amount AUD,Category,Status',
+      'Date,Entity,Description,Merchant,Account,Category,Amount AUD,Direction,Status',
       ...transactions.map((transaction) =>
-        [
-          transaction.postedAt,
-          safe(transaction.description),
-          safe(data.accounts.find((account) => account.id === transaction.accountId)?.name || ''),
-          (transaction.amountCents / 100).toFixed(2),
-          safe(
-            data.categories.find((category) => category.id === transaction.categoryId)?.name ||
-              'Uncategorised',
-          ),
-          transaction.status,
-        ].join(','),
+        (() => {
+          const account = data.accounts.find((candidate) => candidate.id === transaction.accountId);
+          const entity = data.entities.find((candidate) => candidate.id === account?.entityId);
+          return [
+            transaction.postedAt,
+            safe(entity?.name || ''),
+            safe(transaction.description),
+            safe(transaction.merchant || ''),
+            safe(account?.name || ''),
+            safe(
+              data.categories.find((category) => category.id === transaction.categoryId)?.name ||
+                'Uncategorised',
+            ),
+            (transaction.amountCents / 100).toFixed(2),
+            transaction.amountCents >= 0 ? 'Income' : 'Expense',
+            transaction.status,
+          ].join(',');
+        })(),
       ),
     ].join('\r\n');
     const link = document.createElement('a');
-    link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    link.download = 'clinic-finance-transactions.csv';
+    const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }));
+    link.href = url;
+    link.download = `clinic-finance-transactions-${isoToday()}.csv`;
+    link.hidden = true;
+    document.body.append(link);
     link.click();
-    URL.revokeObjectURL(link.href);
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
   return (
     <>
@@ -841,6 +927,37 @@ function Transactions({
                   {account.name}
                 </option>
               ))}
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">Category filter</span>
+            <select
+              value={categoryFilter}
+              onChange={(event) => {
+                setCategoryFilter(event.target.value);
+                setPage(0);
+              }}
+            >
+              <option value="all">All categories</option>
+              {data.categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="sr-only">Status filter</span>
+            <select
+              value={statusFilter}
+              onChange={(event) => {
+                setStatusFilter(event.target.value);
+                setPage(0);
+              }}
+            >
+              <option value="all">Any status</option>
+              <option value="posted">Posted</option>
+              <option value="pending">Pending</option>
             </select>
           </label>
           <label>
@@ -1025,7 +1142,7 @@ function TransactionDetail({
         </label>
         <p className="muted detail-hint">
           {isMock
-            ? 'Changes in the browser demo last for this session.'
+            ? 'Category changes are saved only in this browser until you reset the demo.'
             : 'Category changes are saved to your organisation and recorded in the audit log.'}
         </p>
         <button
@@ -1242,7 +1359,7 @@ function Workspace({ finance }: { finance: FinanceState }) {
           <dl>
             <div>
               <dt>Data source</dt>
-              <dd>{isMock ? 'Browser demo (session only)' : 'Supabase PostgreSQL'}</dd>
+              <dd>{isMock ? 'Browser demo (saved on this device)' : 'Supabase PostgreSQL'}</dd>
             </div>
             <div>
               <dt>Environment</dt>
@@ -1260,7 +1377,7 @@ function Workspace({ finance }: { finance: FinanceState }) {
         </div>
       </section>
       <section className="panel">
-        <PanelHeading title="Banking connections" subtitle="Mock provider · Version 0.1" />
+        <PanelHeading title="Banking connections" subtitle="Mock provider · Version 0.2" />
         <div className="settings-body">
           {data.connections.map((connection) => (
             <div className="connection-row" key={connection.id}>
@@ -1282,8 +1399,8 @@ function Workspace({ finance }: { finance: FinanceState }) {
           <div className="method-note">
             <CircleHelp size={18} />
             <p>
-              Live Open Banking is planned for a later release. This version never connects to a
-              real bank account.
+              This public demonstration never connects to a real bank account. A production Open
+              Banking connection requires a consent provider and a separately secured backend.
             </p>
           </div>
         </div>

@@ -4,6 +4,16 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      deploy_env:
+        description: Site environment to publish
+        required: true
+        default: public-demo
+        type: choice
+        options:
+          - public-demo
+          - hosted-demo
+          - production
 
 permissions:
   contents: read
@@ -40,12 +50,12 @@ jobs:
       - name: Select deployment environment and asset base
         shell: bash
         env:
-          DEPLOY_ENV: ${{ vars.DEPLOY_ENV || 'hosted-demo' }}
+          DEPLOY_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_env || 'public-demo' }}
           PAGES_BASE_PATH: ${{ vars.PAGES_BASE_PATH }}
         run: |
           case "$DEPLOY_ENV" in
-            hosted-demo|production) ;;
-            *) echo "::error::DEPLOY_ENV must be hosted-demo or production; Pages always requires Supabase sign-in"; exit 1 ;;
+            public-demo|hosted-demo|production) ;;
+            *) echo "::error::DEPLOY_ENV must be public-demo, hosted-demo or production"; exit 1 ;;
           esac
           repo_name="${GITHUB_REPOSITORY#*/}"
           base="${PAGES_BASE_PATH:-/$repo_name/}"
@@ -57,6 +67,12 @@ jobs:
             exit 1
           fi
           printf 'DEPLOY_ENV=%s\nVITE_BASE_PATH=%s\n' "$DEPLOY_ENV" "$base" >> "$GITHUB_ENV"
+      - name: Build public browser demo
+        if: env.DEPLOY_ENV == 'public-demo'
+        run: npm run build
+        env:
+          VITE_APP_ENV: demo
+          VITE_DATA_MODE: mock
       - name: Build authenticated demonstration site
         if: env.DEPLOY_ENV == 'hosted-demo'
         run: npm run build:hosted-demo
