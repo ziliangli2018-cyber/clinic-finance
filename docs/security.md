@@ -5,11 +5,12 @@ This is an early functional foundation, not a production security certification.
 ## Implemented controls
 
 - RLS on all public and private application tables; tenant-filtered reads and no broad browser ledger writes.
+- Explicit schema/table/function grants with locked-down default privileges, so future database objects are not exposed through the Data API until a migration deliberately grants access.
 - Composite organisation/entity/account foreign keys prevent cross-tenant references even when server code makes a mistake.
 - Narrow security-definer functions with an empty `search_path`, schema-qualified application objects and explicit EXECUTE grants.
 - Category mutations require owner/admin membership and create an audit event. Viewers cannot change categories or read the editor audit trail.
 - Edge handlers validate JWTs with `auth.getUser(token)` and independently check membership. `organisationId` from the browser is only a requested scope, never proof of authority.
-- Service-role and Basiq credentials remain inside Edge Functions. Authenticated users cannot execute ingestion or read private provider users/connections, raw mock records or runtime flags.
+- Service-role and Basiq credentials remain inside Edge Functions. Server-only ingestion/profile RPCs run as `security invoker`, and authenticated users cannot execute them or read private provider users/connections, raw mock records or runtime flags.
 - Atomic mock ingestion repeats authorization, applies idempotent transaction keys and preserves manual category choices.
 - Multiple explicit mock gates fail closed, including a default production/mock-disabled database configuration.
 - Multiple independent live-provider gates fail closed. Institution IDs are allowlisted, provider pagination cannot leave Basiq's origin/user scope, and only masked account identifiers are persisted.
@@ -36,6 +37,6 @@ Complete Basiq commercial/security and CDR access-model approval, threat modelli
 
 Receipt storage has access controls but no upload or OCR workflow. No malware scanning or document extraction is implemented. No patient identifiers should be ingested. Economic indicators and forecasting are empty foundations; demo assumptions are not authenticated external observations or accounting/tax guidance.
 
-The pgTAP suite exercises actual database roles for cross-tenant reads/writes, viewer restrictions, the server-only ingestion boundary, private tables and production mock rejection. Deno tests exercise mock gating and tenant-scoped identifiers. Passing them verifies those tested properties; it does not replace review of deployed secrets, Auth settings, provider contracts or operating procedures.
+The pgTAP suite exercises actual database roles for cross-tenant reads/writes, viewer restrictions, server-role ingestion, the explicit privilege contract, private tables and production mock rejection. Deno tests exercise mock gating and tenant-scoped identifiers. Passing them verifies those tested properties; it does not replace review of deployed secrets, Auth settings, provider contracts or operating procedures.
 
 References: [Supabase user authentication](https://supabase.com/docs/reference/javascript/auth-getuser), [Edge authentication headers](https://supabase.com/docs/guides/functions/auth-headers), [RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [private Storage access control](https://supabase.com/docs/guides/storage/security/access-control).

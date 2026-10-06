@@ -21,7 +21,7 @@ Version 0.3 uses Supabase Auth, Postgres and Edge Functions. Apply migrations in
 | `private.banking_profiles`              | Organisation-to-Basiq-user mapping, hidden from browser roles.                                                                     |
 | `private.provider_connections`          | Private provider/local connection identity mapping used for cleanup.                                                               |
 
-Every application table has RLS. Browser grants permit only SELECT; no broad financial INSERT/UPDATE/DELETE policies exist. Organisation-owned references include the organisation identifier in composite foreign keys. An account references both a same-tenant entity and same-tenant connection independently, allowing clinic assignment without rewriting provider connection ownership. Monetary values use bounded `bigint` integer cents.
+Every application table has RLS. Browser grants permit only SELECT; no broad financial INSERT/UPDATE/DELETE policies exist. Default privileges keep future tables, sequences and functions private until a migration explicitly grants them. Organisation-owned references include the organisation identifier in composite foreign keys. An account references both a same-tenant entity and same-tenant connection independently, allowing clinic assignment without rewriting provider connection ownership. Monetary values use bounded `bigint` integer cents.
 
 Transaction uniqueness is `(organisation_id, account_id, provider_transaction_id)`. Tenant-scoped deterministic IDs prevent the same sample dataset colliding across organisations. Manual categories survive subsequent syncs. Raw evidence, normalised accounts/transactions, a completed job and its audit event commit together in the ingestion RPC. If the transaction fails, none of those changes commit. A failed-job scheduler and external alerting are future work; a failed sync returns an error and does not manufacture a completed job.
 
@@ -35,7 +35,7 @@ Transaction uniqueness is `(organisation_id, account_id, provider_transaction_id
 
 `ingest_mock_dataset(organisation_id uuid, actor_user_id uuid, dataset jsonb) → jsonb` is executable only by `service_role`, never authenticated/anonymous users. It rechecks editor membership and demo eligibility inside the atomic write, and serialises syncs by locking the organisation. The Edge Function generates the dataset; request bodies cannot supply it.
 
-`ingest_basiq_snapshot`, profile lookup/save/refresh claims and purge RPCs are executable only by `service_role`. Live ingestion locks the private profile, rejects cross-tenant identifier collisions, preserves manual categorisation/account assignment and commits the snapshot plus job/audit result atomically.
+`ingest_basiq_snapshot`, profile lookup/save/refresh claims and purge RPCs are executable only by `service_role` and run with invoker privileges. Live ingestion locks the private profile, rejects cross-tenant identifier collisions, preserves manual categorisation/account assignment and commits the snapshot plus job/audit result atomically.
 
 ## Edge Functions
 
@@ -61,7 +61,7 @@ deno task --config supabase/functions/deno.json check
 deno task --config supabase/functions/deno.json test
 ```
 
-`supabase/tests/database/tenant_security.test.sql` uses real PostgreSQL roles/JWT claims to check two-tenant isolation, viewer restrictions, raw-record denial, narrow RPC authorization, composite-key enforcement, amount limits, private storage and production demo rejection. Tests roll back their fixtures. A local Supabase Docker stack is required; cloud credentials are not needed.
+The database suite uses real PostgreSQL roles/JWT claims to check two-tenant isolation, viewer restrictions, raw-record denial, narrow RPC authorization, server-role ingestion, explicit current/default privileges, composite-key enforcement, amount limits, private storage and production demo rejection. Tests roll back their fixtures. A local Supabase Docker stack is required; cloud credentials are not needed.
 
 For local functions, copy `supabase/functions/.env.example` to ignored `supabase/functions/.env.local`, then run `npx supabase functions serve --env-file supabase/functions/.env.local`. Supabase injects its server credentials. Use the local API URL and publishable/anon key in the frontend's ignored `.env.local`. Never place the service-role key in a Vite environment variable.
 
