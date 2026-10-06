@@ -39,7 +39,9 @@ export function detectInternalTransfers(
       Number.isSafeInteger(transaction.amountCents) &&
       transaction.amountCents !== 0 &&
       account?.organisationId === transaction.organisationId &&
-      account.currency === transaction.currency
+      account.currency === transaction.currency &&
+      account.kind !== 'loan' &&
+      account.kind !== 'mortgage'
     );
   });
   const candidates = new Map<string, Transaction[]>();
@@ -99,6 +101,13 @@ export function verifiedTransferIds(
     const aAccount = accountMap.get(a.accountId);
     const bAccount = accountMap.get(b.accountId);
     if (a.status !== 'posted' || b.status !== 'posted' || !aAccount || !bAccount) continue;
+    if (
+      aAccount.kind === 'loan' ||
+      aAccount.kind === 'mortgage' ||
+      bAccount.kind === 'loan' ||
+      bAccount.kind === 'mortgage'
+    )
+      continue;
     if (a.id === b.id || a.accountId === b.accountId || a.organisationId !== b.organisationId)
       continue;
     if (

@@ -1,5 +1,5 @@
 import type { FinanceDataset, FinanceScope, Transaction } from '../types/domain.ts';
-import { filterAccounts } from './analytics.ts';
+import { filterAccounts, isCashAccount } from './analytics.ts';
 import { dateValue, shiftDate } from './dates.ts';
 import { verifiedTransferIds } from './transfers.ts';
 
@@ -194,7 +194,7 @@ export function buildCashflowForecast(
   validateHorizon(horizonDays);
 
   const cashAccounts = filterAccounts(data, scope)
-    .filter((account) => account.kind !== 'credit_card')
+    .filter(isCashAccount)
     .sort((left, right) => left.id.localeCompare(right.id));
   const cashAccountIds = new Set(cashAccounts.map((account) => account.id));
   const transferIds = verifiedTransferIds(data.transactions, data.accounts);
@@ -280,7 +280,7 @@ export function buildCashflowForecast(
 
   const closing = points.at(-1)!;
   const assumptions = [
-    `Opening cash includes ${cashAccounts.length} scoped non-credit-card account${cashAccounts.length === 1 ? '' : 's'}; credit-card liabilities are excluded.`,
+    `Opening cash includes ${cashAccounts.length} scoped transaction, operating, or savings account${cashAccounts.length === 1 ? '' : 's'}; credit cards, loans, mortgages, and term deposits are excluded.`,
     historyDays
       ? `Uses ${history.length} posted, non-transfer cash transaction${history.length === 1 ? '' : 's'} over ${historyDays} observed day${historyDays === 1 ? '' : 's'} (up to the latest 180 days); pending transactions and internal transfers are excluded.`
       : 'No usable posted cash history was available, so no future income or spending was invented.',

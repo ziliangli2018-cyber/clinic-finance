@@ -44,6 +44,12 @@ enable_confirmations = false
 [functions.bank-sync]
 verify_jwt = false
 import_map = "./functions/deno.json"
+[functions.bank-connect]
+verify_jwt = false
+import_map = "./functions/deno.json"
+[functions.bank-sync-scheduled]
+verify_jwt = false
+import_map = "./functions/deno.json"
 [functions.transaction-processing]
 verify_jwt = false
 import_map = "./functions/deno.json"

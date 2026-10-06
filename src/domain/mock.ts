@@ -10,21 +10,27 @@ const UPDATED_AT = `${MOCK_AS_OF}T07:30:00.000Z`;
 export function createMockDataset(): FinanceDataset {
   const organisation = {
     id: stableId('organisation', 'demo'),
-    name: 'Banksia Dental Group',
+    name: 'Kilcoy & Burpengary Dental Group',
     isDemo: true,
   };
   const entities = [
     {
       id: stableId('entity', 'a'),
       organisationId: organisation.id,
-      name: 'Clinic A · Paddington',
+      name: 'Kilcoy',
       kind: 'clinic' as const,
     },
     {
       id: stableId('entity', 'b'),
       organisationId: organisation.id,
-      name: 'Clinic B · New Farm',
+      name: 'Burpengary',
       kind: 'clinic' as const,
+    },
+    {
+      id: stableId('entity', 'group'),
+      organisationId: organisation.id,
+      name: 'Group finance',
+      kind: 'group' as const,
     },
     {
       id: stableId('entity', 'personal'),
@@ -42,14 +48,15 @@ export function createMockDataset(): FinanceDataset {
     lastSyncedAt: UPDATED_AT,
   }));
   const definitions: Array<[number, string, Account['kind'], string, number, string]> = [
-    [0, 'Clinic A operating', 'operating', 'Commonwealth Bank · Demo', 5_720_500, '4821'],
-    [0, 'Clinic A reserve', 'savings', 'Commonwealth Bank · Demo', 9_500_000, '1168'],
-    [0, 'Clinic A card', 'credit_card', 'Westpac · Demo', -425_700, '9042'],
-    [1, 'Clinic B operating', 'operating', 'ANZ · Demo', 4_381_200, '7305'],
-    [1, 'Clinic B reserve', 'savings', 'ANZ · Demo', 6_200_000, '2289'],
-    [1, 'Clinic B card', 'credit_card', 'NAB · Demo', -280_500, '6501'],
-    [2, 'Everyday personal', 'transaction', 'Macquarie · Demo', 894_500, '3156'],
-    [2, 'Personal credit card', 'credit_card', 'Macquarie · Demo', -95_000, '8824'],
+    [0, 'Kilcoy operating', 'operating', 'NAB · Demo', 5_720_500, '4821'],
+    [0, 'Kilcoy reserve', 'savings', 'NAB · Demo', 9_500_000, '1168'],
+    [0, 'Kilcoy business card', 'credit_card', 'NAB · Demo', -425_700, '9042'],
+    [1, 'Burpengary operating', 'operating', 'NAB · Demo', 4_381_200, '7305'],
+    [1, 'Burpengary reserve', 'savings', 'NAB · Demo', 6_200_000, '2289'],
+    [1, 'Burpengary business card', 'credit_card', 'NAB · Demo', -280_500, '6501'],
+    [2, 'BOQ Specialist practice loan', 'loan', 'BOQ Specialist · Demo', -58_400_000, '2217'],
+    [3, 'Everyday personal', 'transaction', 'Macquarie · Demo', 894_500, '3156'],
+    [3, 'Personal credit card', 'credit_card', 'Macquarie · Demo', -95_000, '8824'],
   ];
   const accounts: Account[] = definitions.map(
     ([entityIndex, name, kind, institution, balanceCents, ending], index) => ({
@@ -260,14 +267,18 @@ export function createMockDataset(): FinanceDataset {
           -amount(64_900),
           'Chaircare Maintenance · Fictitious',
         );
-      if (monthDay === 21)
-        add(
-          operating,
-          date,
-          'BUSINESS EQUIPMENT LOAN REPAYMENT',
-          -amount(185_500),
-          'Practice lender · Fictitious',
-        );
+      if (monthDay === 21) {
+        if (clinic === 0)
+          transfer(operating, 6, date, amount(185_500), 'BOQS PRACTICE LOAN REPAYMENT');
+        else
+          add(
+            operating,
+            date,
+            'BUSINESS EQUIPMENT LOAN REPAYMENT',
+            -amount(185_500),
+            'Practice lender · Fictitious',
+          );
+      }
       if (monthDay === 24)
         transfer(operating, reserve, date, amount(240_000), 'INTERNAL TRANSFER GST RESERVE');
       if (monthDay === 28)
@@ -283,20 +294,20 @@ export function createMockDataset(): FinanceDataset {
     }
     if (weekday === 6) {
       add(
-        6,
+        7,
         date,
         'LOCAL SUPERMARKET GROCERIES',
         -(18_300 + day * 53),
         'Neighbourhood Grocer · Fictitious',
       );
-      add(7, date, 'WEEKEND CAFE', -(4_650 + day * 11), 'Garden Cafe · Fictitious');
+      add(8, date, 'WEEKEND CAFE', -(4_650 + day * 11), 'Garden Cafe · Fictitious');
     }
-    if (weekday === 3) add(6, date, 'PETROL FUEL', -(7_850 + day * 9), 'Local fuel · Fictitious');
-    if (monthDay === 5) transfer(6, 7, date, 85_000, 'CARD REPAYMENT');
+    if (weekday === 3) add(7, date, 'PETROL FUEL', -(7_850 + day * 9), 'Local fuel · Fictitious');
+    if (monthDay === 5) transfer(7, 8, date, 85_000, 'CARD REPAYMENT');
     if (monthDay === 15)
-      add(7, date, 'CREDIT CARD INTEREST CHARGE', -3_456, 'Bank interest · Demo');
+      add(8, date, 'CREDIT CARD INTEREST CHARGE', -3_456, 'Bank interest · Demo');
     if (monthDay === 21)
-      add(6, date, 'HOMEWARES PERSONAL SHOPPING', -24_950, 'Home store · Fictitious');
+      add(7, date, 'HOMEWARES PERSONAL SHOPPING', -24_950, 'Home store · Fictitious');
     if (day === 89) {
       add(
         2,

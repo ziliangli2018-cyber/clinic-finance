@@ -81,7 +81,9 @@ export class BasiqFinancialProvider implements FinancialDataProvider {
   readonly provider = 'basiq' as const;
 
   async loadDataset(): Promise<FinanceDataset> {
-    throw new Error('Basiq is not connected. Live banking is unavailable in version 0.1.');
+    throw new Error(
+      'Direct browser Basiq access is prohibited; use authenticated server functions.',
+    );
   }
   async connect(): Promise<BankConnection[]> {
     await this.loadDataset();

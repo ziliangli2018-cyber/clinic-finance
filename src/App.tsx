@@ -44,11 +44,13 @@ import {
   filterTransactions,
   formatCompactMoney,
   formatMoney,
+  isCashAccount,
 } from './domain/analytics';
 import { useFinance } from './hooks/useFinance';
 import { isMock, isProduction, supabase } from './services/supabase';
 import { csvCell } from './utils/csv';
 import { CashflowForecast } from './components/CashflowForecast';
+import { BankingConnections } from './components/BankingConnections';
 
 type FinanceState = ReturnType<typeof useFinance>;
 const isoToday = () =>
@@ -94,7 +96,8 @@ export function App() {
     from: fromDate.toISOString().slice(0, 10),
     to,
   };
-  const entityName = data?.entities.find((entity) => entity.id === entityId)?.name || 'All clinics';
+  const entityName =
+    data?.entities.find((entity) => entity.id === entityId)?.name || 'All business';
   return (
     <div className="app-shell">
       {menu && (
@@ -167,7 +170,7 @@ export function App() {
             <span>CF</span>
             <div>
               <strong>{isMock ? 'Demo workspace' : 'Signed in securely'}</strong>
-              <small>Version 0.2</small>
+              <small>Version 0.3</small>
             </div>
             {!isMock && (
               <button
@@ -224,7 +227,14 @@ export function App() {
             {data && (
               <button
                 className="button secondary"
-                disabled={finance.busy || (isProduction && !isMock)}
+                disabled={
+                  finance.busy ||
+                  (!isMock &&
+                    !data.connections.some(
+                      (connection) =>
+                        connection.provider === 'basiq' && connection.status === 'active',
+                    ))
+                }
                 onClick={() => void finance.sync()}
                 title={isMock ? 'Generate the next fictitious activity update' : 'Refresh data'}
               >
@@ -260,7 +270,7 @@ export function App() {
                       onClick={() => setEntityId('all')}
                     >
                       <Building2 size={15} />
-                      All clinics
+                      All business
                     </button>
                     {data.entities.map((entity) => (
                       <button
@@ -293,7 +303,10 @@ export function App() {
                   path="/transactions"
                   element={<Transactions data={data} scope={scope} finance={finance} />}
                 />
-                <Route path="/accounts" element={<Accounts data={data} scope={scope} />} />
+                <Route
+                  path="/accounts"
+                  element={<Accounts data={data} scope={scope} finance={finance} />}
+                />
                 <Route path="/forecast" element={<CashflowForecast data={data} scope={scope} />} />
                 <Route path="/analytics" element={<Analytics data={data} scope={scope} />} />
                 <Route path="/settings" element={<Workspace finance={finance} />} />
@@ -307,7 +320,7 @@ export function App() {
                   · All amounts in AUD
                 </span>
                 <span>
-                  Clinic Finance <span className="footer-version">0.2</span>
+                  Clinic Finance <span className="footer-version">0.3</span>
                 </span>
               </footer>
             </>
@@ -361,7 +374,7 @@ function DemoNotice({ finance }: { finance: FinanceState }) {
 }
 
 function Onboarding({ finance }: { finance: FinanceState }) {
-  const [name, setName] = useState('My clinic group');
+  const [name, setName] = useState('Kilcoy & Burpengary Dental Group');
   return (
     <section className="empty-state onboarding">
       <span className="empty-icon">
@@ -370,31 +383,33 @@ function Onboarding({ finance }: { finance: FinanceState }) {
       <h2>Make room for a clearer picture</h2>
       <p>
         {isProduction
-          ? 'Your account is ready. Ask your workspace administrator to add your organisation membership.'
-          : 'Create a demo organisation with two clinics, eight accounts and 90 days of realistic Australian transactions.'}
+          ? 'Create a private workspace for Kilcoy, Burpengary and your group finance accounts. Bank consent is completed after the workspace is ready.'
+          : 'Create a demo organisation with two clinics, a group loan, personal examples and 90 days of realistic Australian transactions.'}
       </p>
-      {!isProduction && (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void finance.createDemo(name);
-          }}
-        >
-          <label>
-            Organisation name
-            <input
-              value={name}
-              maxLength={100}
-              required
-              onChange={(event) => setName(event.target.value)}
-            />
-          </label>
-          <button className="button primary" disabled={finance.busy}>
-            {finance.busy ? 'Creating workspace…' : 'Create demo workspace'}
-            <ArrowRight size={17} />
-          </button>
-        </form>
-      )}
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void (isProduction ? finance.createLive(name) : finance.createDemo(name));
+        }}
+      >
+        <label>
+          Organisation name
+          <input
+            value={name}
+            maxLength={120}
+            required
+            onChange={(event) => setName(event.target.value)}
+          />
+        </label>
+        <button className="button primary" disabled={finance.busy}>
+          {finance.busy
+            ? 'Creating workspace…'
+            : isProduction
+              ? 'Create secure workspace'
+              : 'Create demo workspace'}
+          <ArrowRight size={17} />
+        </button>
+      </form>
     </section>
   );
 }
@@ -440,18 +455,28 @@ function Dashboard({
     .sort((a, b) => b.postedAt.localeCompare(a.postedAt))
     .slice(0, 5);
   const accounts = scopedAccounts(data, scope);
-  const cashAccounts = accounts.filter((account) => account.kind !== 'credit_card');
+  const cashAccounts = accounts.filter(isCashAccount);
   const cashAccountIds = new Set(cashAccounts.map((account) => account.id));
   const cash = cashAccounts.reduce((sum, account) => sum + account.balanceCents, 0);
-  const pendingOutflows = data.transactions
-    .filter(
-      (transaction) =>
-        transaction.status === 'pending' &&
-        transaction.amountCents < 0 &&
-        cashAccountIds.has(transaction.accountId),
-    )
-    .reduce((sum, transaction) => sum - transaction.amountCents, 0);
-  const availableCash = cash - pendingOutflows;
+  const pendingByAccount = new Map<string, number>();
+  for (const transaction of data.transactions.filter(
+    (transaction) =>
+      transaction.status === 'pending' &&
+      transaction.amountCents < 0 &&
+      cashAccountIds.has(transaction.accountId),
+  ))
+    pendingByAccount.set(
+      transaction.accountId,
+      (pendingByAccount.get(transaction.accountId) ?? 0) - transaction.amountCents,
+    );
+  const pendingOutflows = [...pendingByAccount.values()].reduce((sum, amount) => sum + amount, 0);
+  const availableCash = cashAccounts.reduce(
+    (sum, account) =>
+      sum +
+      (account.availableFundsCents ??
+        account.balanceCents - (pendingByAccount.get(account.id) ?? 0)),
+    0,
+  );
   return (
     <>
       <div className="metric-grid">
@@ -1176,7 +1201,19 @@ function scopedAccounts(data: FinanceDataset, scope: FinanceScope) {
   return data.accounts.filter((account) => entityIds.includes(account.entityId));
 }
 
-function Accounts({ data, scope }: { data: FinanceDataset; scope: FinanceScope }) {
+function isLiabilityAccount(kind: FinanceDataset['accounts'][number]['kind']) {
+  return kind === 'credit_card' || kind === 'loan' || kind === 'mortgage';
+}
+
+function Accounts({
+  data,
+  scope,
+  finance,
+}: {
+  data: FinanceDataset;
+  scope: FinanceScope;
+  finance: FinanceState;
+}) {
   const accounts = scopedAccounts(data, scope);
   const navigate = useNavigate();
   const entities = data.entities.filter((entity) =>
@@ -1194,13 +1231,19 @@ function Accounts({ data, scope }: { data: FinanceDataset; scope: FinanceScope }
             {formatMoney(accounts.reduce((sum, account) => sum + account.balanceCents, 0))}
           </strong>
         </span>
-        <span className="muted">Includes credit card liabilities</span>
+        <span className="muted">Includes credit cards, loans and term deposits</span>
       </div>
       {entities.map((entity) => (
         <section key={entity.id} className="entity-section">
           <div className="section-title">
             <h2>{entity.name}</h2>
-            <span>{entity.kind === 'clinic' ? 'Dental practice' : 'Personal finances'}</span>
+            <span>
+              {entity.kind === 'clinic'
+                ? 'Dental practice'
+                : entity.kind === 'group'
+                  ? 'Shared group finance'
+                  : 'Personal finances'}
+            </span>
           </div>
           <div className="account-grid">
             {accounts
@@ -1209,7 +1252,7 @@ function Accounts({ data, scope }: { data: FinanceDataset; scope: FinanceScope }
                 <article className="account-card" key={account.id}>
                   <div className="account-card-top">
                     <span
-                      className={`bank-symbol ${account.kind === 'credit_card' ? 'card-symbol' : ''}`}
+                      className={`bank-symbol ${isLiabilityAccount(account.kind) ? 'card-symbol' : ''}`}
                     >
                       {account.kind === 'credit_card' ? (
                         <CreditCard size={24} />
@@ -1230,10 +1273,50 @@ function Accounts({ data, scope }: { data: FinanceDataset; scope: FinanceScope }
                   </p>
                   <div className="account-balance">
                     <small>
-                      {account.kind === 'credit_card' ? 'Credit card balance' : 'Current balance'}
+                      {account.kind === 'credit_card'
+                        ? 'Credit card balance'
+                        : account.kind === 'loan' || account.kind === 'mortgage'
+                          ? 'Outstanding balance'
+                          : account.kind === 'term_deposit'
+                            ? 'Term deposit balance'
+                            : 'Current balance'}
                     </small>
-                    <strong>{formatMoney(account.balanceCents)}</strong>
+                    <strong>
+                      {formatMoney(
+                        account.kind === 'loan' || account.kind === 'mortgage'
+                          ? Math.abs(account.balanceCents)
+                          : account.balanceCents,
+                      )}
+                    </strong>
+                    {account.kind !== 'loan' &&
+                      account.kind !== 'mortgage' &&
+                      account.availableFundsCents !== null &&
+                      account.availableFundsCents !== undefined && (
+                        <span className="account-available">
+                          Available {formatMoney(account.availableFundsCents)}
+                        </span>
+                      )}
                   </div>
+                  {!isMock && (
+                    <label className="account-assignment">
+                      Assign to
+                      <select
+                        value={account.entityId}
+                        disabled={finance.busy}
+                        onChange={(event) =>
+                          void finance.assignAccount(account.id, event.target.value)
+                        }
+                      >
+                        {data.entities
+                          .filter((candidate) => candidate.kind !== 'personal')
+                          .map((candidate) => (
+                            <option key={candidate.id} value={candidate.id}>
+                              {candidate.name}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  )}
                   <div className="account-card-footer">
                     <span>
                       {new Date(account.updatedAt).toLocaleDateString('en-AU', {
@@ -1376,35 +1459,45 @@ function Workspace({ finance }: { finance: FinanceState }) {
           </dl>
         </div>
       </section>
-      <section className="panel">
-        <PanelHeading title="Banking connections" subtitle="Mock provider · Version 0.2" />
-        <div className="settings-body">
-          {data.connections.map((connection) => (
-            <div className="connection-row" key={connection.id}>
-              <span className="bank-symbol">
-                <Building2 size={21} />
-              </span>
-              <div>
-                <strong>
-                  {data.entities.find((entity) => entity.id === connection.entityId)?.name}
-                </strong>
-                <span>
-                  {connection.provider === 'mock' ? 'Mock financial provider' : 'Basiq'} ·{' '}
-                  {connection.status}
+      {isMock ? (
+        <section className="panel">
+          <PanelHeading
+            title="Banking connections"
+            subtitle="Fictional provider data · Version 0.3"
+          />
+          <div className="settings-body">
+            {data.connections.map((connection) => (
+              <div className="connection-row" key={connection.id}>
+                <span className="bank-symbol">
+                  <Building2 size={21} />
                 </span>
+                <div>
+                  <strong>
+                    {data.entities.find((entity) => entity.id === connection.entityId)?.name}
+                  </strong>
+                  <span>Mock financial provider · {connection.status}</span>
+                </div>
+                <ShieldCheck size={18} />
               </div>
-              <ShieldCheck size={18} />
+            ))}
+            <div className="method-note">
+              <CircleHelp size={18} />
+              <p>
+                This public demonstration never connects to a bank or requests credentials. The
+                secure hosted workspace uses consent-based Open Banking.
+              </p>
             </div>
-          ))}
-          <div className="method-note">
-            <CircleHelp size={18} />
-            <p>
-              This public demonstration never connects to a real bank account. A production Open
-              Banking connection requires a consent provider and a separately secured backend.
-            </p>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : (
+        <BankingConnections
+          organisationId={data.organisation.id}
+          workspaceBusy={finance.busy}
+          enabled={!isMock}
+          onRefresh={async () => finance.sync()}
+          onDisconnected={finance.refresh}
+        />
+      )}
     </div>
   );
 }

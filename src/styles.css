@@ -934,6 +934,12 @@ select {
   display: block;
   margin-top: 5px;
 }
+.account-available {
+  display: block;
+  margin-top: 7px;
+  color: #6f838e;
+  font-size: 0.75rem;
+}
 .account-card-footer {
   display: flex;
   align-items: center;
@@ -1103,6 +1109,89 @@ select {
 }
 .connection-row > svg {
   color: #89a28f;
+}
+.banking-status-summary {
+  display: flex;
+  gap: 13px;
+  align-items: center;
+  padding: 4px 0 14px;
+}
+.banking-status-summary > div {
+  display: grid;
+  gap: 5px;
+}
+.banking-status-summary strong {
+  font-size: 0.92rem;
+}
+.banking-status-summary span {
+  color: #7b909a;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.banking-notice,
+.banking-error {
+  border-radius: 8px;
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+.banking-notice {
+  background: #f1f6f4;
+  color: #557068;
+}
+.banking-error {
+  background: #fff2ef;
+  color: #964d43;
+}
+.banking-details {
+  margin: 18px 0;
+}
+.banking-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+}
+.banking-actions .button {
+  min-height: 40px;
+}
+.banking-remove {
+  color: #9b544c;
+}
+.button.danger {
+  background: #9b544c;
+  color: white;
+  border-color: #9b544c;
+}
+.banking-dialog {
+  width: min(520px, calc(100vw - 32px));
+  border: 0;
+  border-radius: 12px;
+  box-shadow: 0 24px 80px #17303d42;
+  padding: 28px;
+  color: var(--navy);
+}
+.banking-dialog::backdrop {
+  background: #112f3f70;
+}
+.banking-dialog h2 {
+  font-size: 1.25rem;
+  margin: 0 0 12px;
+}
+.banking-dialog > p {
+  color: #647a85;
+  font-size: 0.84rem;
+  line-height: 1.65;
+}
+.account-assignment {
+  display: block;
+  margin: 16px 0 0;
+  color: #6f838e;
+}
+.account-assignment select {
+  padding: 8px 10px;
 }
 dl {
   margin: 25px 0;

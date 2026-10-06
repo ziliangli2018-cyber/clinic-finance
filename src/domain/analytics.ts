@@ -10,6 +10,11 @@ import type {
 import { dateValue, shiftDate } from './dates.ts';
 import { verifiedTransferIds } from './transfers.ts';
 
+/** Accounts whose balances represent immediately usable cash. */
+export function isCashAccount(account: Account): boolean {
+  return ['operating', 'savings', 'transaction'].includes(account.kind);
+}
+
 function validateScope(scope: FinanceScope): void {
   for (const date of [scope.from, scope.to]) {
     if (date !== undefined && !Number.isFinite(dateValue(date)))
@@ -60,8 +65,16 @@ export function filterTransactions(
 
 function reportTransactions(dataset: FinanceDataset, scope: FinanceScope): Transaction[] {
   const transfers = verifiedTransferIds(dataset.transactions, dataset.accounts);
+  const reportAccountIds = new Set(
+    filterAccounts(dataset, scope)
+      .filter((account) => isCashAccount(account) || account.kind === 'credit_card')
+      .map((account) => account.id),
+  );
   return filterTransactions(dataset, scope).filter(
-    (transaction) => transaction.status === 'posted' && !transfers.has(transaction.id),
+    (transaction) =>
+      reportAccountIds.has(transaction.accountId) &&
+      transaction.status === 'posted' &&
+      !transfers.has(transaction.id),
   );
 }
 
@@ -71,9 +84,7 @@ export function calculateSummary(
 ): FinanceSummary {
   const scoped = filterTransactions(dataset, scope);
   const transfers = verifiedTransferIds(dataset.transactions, dataset.accounts);
-  const posted = scoped.filter(
-    (transaction) => transaction.status === 'posted' && !transfers.has(transaction.id),
-  );
+  const posted = reportTransactions(dataset, scope);
   const incomeCents = posted.reduce(
     (total, transaction) => total + Math.max(transaction.amountCents, 0),
     0,
