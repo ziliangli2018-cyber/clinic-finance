@@ -1,6 +1,6 @@
 # Local setup and GitHub Pages deployment
 
-Version 0.1 supports local development and a hosted demonstration protected by Supabase sign-in. GitHub hosts the public source and compiled frontend; Supabase controls access to stored records. The Pages workflow always requires Supabase and never publishes the browser-only mock mode. No live banking integration is enabled by these steps.
+Version 0.2 supports local development and a public, browser-only demonstration on GitHub Pages. The public demo uses deterministic fictional data, saves changes in local browser storage and contains no banking credentials. An optional hosted mode uses Supabase sign-in for organisation data. No live banking integration is enabled by these steps.
 
 ## 1. Run the browser demo
 
@@ -23,7 +23,7 @@ npm run build
 npm run preview
 ```
 
-This build is an explicit `demo/mock` build for local preview and browser tests. It is not the Pages deployment build. `npm run preview` serves files already in `dist/`; it does not start Supabase.
+This explicit `demo/mock` build is also the default Pages deployment target. `npm run preview` serves files already in `dist/`; it does not start Supabase.
 
 ## 2. Run local Supabase
 
@@ -96,13 +96,13 @@ To return to browser-only mock mode, remove or rename `.env.development.local` a
 
 The authorised deployment uses the public [clinic-finance repository](https://github.com/ziliangli2018-cyber/clinic-finance) and the project site at [Clinic Finance](https://ziliangli2018-cyber.github.io/clinic-finance/). Keep source, migrations, lockfiles, tests and documentation in GitHub. Do not upload `node_modules/`, `dist/`, ignored environment files, local database volumes or real financial records. Review the full Git history for secrets and private records before changing repository visibility.
 
-Use the existing Git repository and remote; do not create a second repository. Complete the hosted backend configuration below before publishing. These instructions describe the required configuration, not a claim that every hosted setup step has already passed verification.
+Use the existing Git repository and remote; do not create a second repository. The default public demo needs no hosted backend configuration. The optional Supabase configuration later in this document applies only when deliberately switching deployment modes.
 
 In the repository settings:
 
 1. Open **Pages** and choose **GitHub Actions** as the build and deployment source.
-2. Under **Secrets and variables → Actions → Variables**, set `DEPLOY_ENV` to `hosted-demo`. Unset also defaults to `hosted-demo`. The only other accepted value is `production`.
-3. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` to the hosted project's public values. Leave `PAGES_BASE_PATH` unset for the ordinary project address; set it to `/` for a root/custom domain.
+2. Pushes to `main` always publish the `public-demo` environment. A manual workflow run can deliberately choose `public-demo`, `hosted-demo` or `production`.
+3. The public demo needs no Supabase variables. For a deliberate hosted mode, set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` to the hosted project's public values. Leave `PAGES_BASE_PATH` unset for the ordinary project address; set it to `/` for a root/custom domain.
 4. Configure a ruleset or branch protection for `main`, requiring pull requests and both validation jobs where the repository plan supports it.
 5. Configure the `github-pages` environment to allow deployments only from `main`. Add required reviewers if your release process needs a separate approval gate.
 6. Push approved code to `main`, or run **Deploy GitHub Pages** manually on `main`.
@@ -111,9 +111,9 @@ The workflow itself never deploys a pull request or a manually selected non-main
 
 ### Public source and private data
 
-The source repository and Pages assets are public. A shared password embedded in JavaScript cannot protect them. The application instead uses individual Supabase email-and-password accounts, with database RLS and trusted backend checks enforcing access to each organisation's records. See [GitHub Pages availability](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages).
+The source repository and Pages assets are public. The default public demo intentionally bundles only fictitious records and keeps user changes on the device. Do not enter real financial records into it. A shared password embedded in JavaScript cannot protect data. See [GitHub Pages availability](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages).
 
-The hosted demo uses fictitious financial records stored in Supabase, and its frontend has no bundled mock dataset or unauthenticated workspace fallback. Disable public signup in the hosted Supabase Auth settings and provision approved users through a trusted administration flow. Hiding the signup button is only a UI measure; the server setting is required. Keep real financial records out of the demo project and public Git history.
+Optional hosted modes use individual Supabase email-and-password accounts, with database RLS and trusted backend checks enforcing access to each organisation's records. Disable public signup in the hosted Supabase Auth settings and provision approved users through a trusted administration flow. Hiding the signup button is only a UI measure; the server setting is required.
 
 ## Workflow behaviour
 
@@ -128,21 +128,21 @@ The workflow follows the official [GitHub Pages custom workflow requirements](ht
 
 ## Public configuration and secrets
 
-| Setting                                                    | Location                         | Purpose                                                 |
-| ---------------------------------------------------------- | -------------------------------- | ------------------------------------------------------- |
-| `VITE_APP_ENV`                                             | Frontend build                   | `development`, `demo` or `production`                   |
-| `VITE_DATA_MODE`                                           | Frontend build                   | `mock` or `supabase`; both Pages modes require Supabase |
-| `VITE_SUPABASE_URL`                                        | Frontend public variable         | Supabase project endpoint                               |
-| `VITE_SUPABASE_PUBLISHABLE_KEY`                            | Frontend public variable         | Public/publishable or legacy anon key                   |
-| `VITE_BASE_PATH`                                           | Frontend build                   | Asset path with leading and trailing `/`                |
-| `DEPLOY_ENV`                                               | GitHub repository variable       | `hosted-demo` or `production`; default `hosted-demo`    |
-| `PAGES_BASE_PATH`                                          | GitHub repository variable       | Optional override for generated asset path              |
-| `APP_ENV`, `ALLOW_MOCK_DATA`, `CORS_ALLOWED_ORIGINS`       | Edge Function environment        | Backend mode and accepted browser origins               |
-| Supabase service-role key and all provider/API credentials | Trusted backend environment only | Privileged server operations                            |
+| Setting                                                    | Location                         | Purpose                                                                |
+| ---------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------- |
+| `VITE_APP_ENV`                                             | Frontend build                   | `development`, `demo` or `production`                                  |
+| `VITE_DATA_MODE`                                           | Frontend build                   | `mock` for public demo, `supabase` for hosted modes                    |
+| `VITE_SUPABASE_URL`                                        | Frontend public variable         | Supabase project endpoint                                              |
+| `VITE_SUPABASE_PUBLISHABLE_KEY`                            | Frontend public variable         | Public/publishable or legacy anon key                                  |
+| `VITE_BASE_PATH`                                           | Frontend build                   | Asset path with leading and trailing `/`                               |
+| `deploy_env`                                               | Manual Pages workflow input      | `public-demo`, `hosted-demo` or `production`; pushes use `public-demo` |
+| `PAGES_BASE_PATH`                                          | GitHub repository variable       | Optional override for generated asset path                             |
+| `APP_ENV`, `ALLOW_MOCK_DATA`, `CORS_ALLOWED_ORIGINS`       | Edge Function environment        | Backend mode and accepted browser origins                              |
+| Supabase service-role key and all provider/API credentials | Trusted backend environment only | Privileged server operations                                           |
 
 Every `VITE_*` value must be treated as public, even if entered in a GitHub “secret” field. Vite embeds frontend values in downloadable assets. CORS restricts browser origins; authentication, membership checks and RLS still enforce access.
 
-## 4. Configure the hosted Supabase demo
+## 4. Optional: configure the hosted Supabase demo
 
 The selected demo project is `clinic-finance-demo`, reference `gackqbplslckvdyijivb`, in Sydney (`ap-southeast-2`). Its public endpoint is `https://gackqbplslckvdyijivb.supabase.co`. Use a separate Supabase project for future production data.
 
@@ -151,7 +151,7 @@ The selected demo project is `clinic-finance-demo`, reference `gackqbplslckvdyij
 3. Configure Edge Function settings as shown below. Supabase provides the functions' built-in backend credentials; do not copy a service-role key into the frontend.
 4. Apply the explicit demo runtime SQL below to this demo project's database. Migrations default to production with mocks disabled, so frontend environment variables alone cannot enable mock ingestion.
 5. Deploy `bank-sync`, `transaction-processing`, `receipt-processing` and `economic-data-sync`. The latter three remain authenticated placeholders; deployment does not enable their future integrations.
-6. Set GitHub's public URL/key variables and `DEPLOY_ENV=hosted-demo`. Build and publish from `main`. The hosted-demo build requires an HTTPS Supabase endpoint and a public/publishable or legacy anon key.
+6. Set GitHub's public URL/key variables and manually run the Pages workflow with `deploy_env=hosted-demo`. The hosted-demo build requires an HTTPS Supabase endpoint and a public/publishable or legacy anon key.
 7. Verify unauthenticated rejection, tenant isolation, sign-in, sign-out and direct hash-route reloads. Sign in as the approved owner, create a demo organisation and run mock synchronisation to provision fictitious accounts and transactions.
 
 Hosted demo Edge Function settings:
@@ -176,9 +176,9 @@ For a local preview of the hosted frontend, supply that project's public URL/key
 
 ### Future production deployment
 
-Apply migrations to a separate production project without the local seed or demo runtime SQL. Configure `APP_ENV=production`, `ALLOW_MOCK_DATA=false`, an exact browser-origin allowlist and production database runtime settings. Configure Auth, approved users and email delivery for that project, deploy the functions, then set GitHub's public URL/key variables and `DEPLOY_ENV=production`.
+Apply migrations to a separate production project without the local seed or demo runtime SQL. Configure `APP_ENV=production`, `ALLOW_MOCK_DATA=false`, an exact browser-origin allowlist and production database runtime settings. Configure Auth, approved users and email delivery for that project, deploy the functions, then set GitHub's public URL/key variables and manually run the Pages workflow with `deploy_env=production`.
 
-Both hosted-demo and production builds fail closed when required public project configuration is missing or mock mode is requested. Neither ships the frontend mock dataset. Production cannot provision demo organisations or refresh the mock provider. Until live provider onboarding is implemented and authorised, production may have no financial data; that is expected.
+Both hosted-demo and production builds fail closed when required public project configuration is missing or mock mode is requested. Neither uses the browser mock dataset at runtime or provides an unauthenticated workspace fallback. Production cannot provision demo organisations or refresh the mock provider. Until live provider onboarding is implemented and authorised, production may have no financial data; that is expected.
 
 ## Project paths, deep links and custom domains
 

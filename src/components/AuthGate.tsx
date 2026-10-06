@@ -90,7 +90,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       </section>
       <section className="auth-form">
         <div className="auth-form-inner">
-          <span className="eyebrow">CLINIC FINANCE · V0.1</span>
+          <span className="eyebrow">CLINIC FINANCE · V0.2</span>
           <h2>{mode === 'login' ? 'Welcome back' : 'Create your account'}</h2>
           <p className="muted">
             {mode === 'login'
