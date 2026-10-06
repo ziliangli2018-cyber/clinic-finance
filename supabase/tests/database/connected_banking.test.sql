@@ -29,6 +29,7 @@ insert into private.banking_profiles(id, organisation_id, provider_user_id)
 select '12000000-0000-4000-8000-000000000001', id, 'provider-user-one'
 from public.organisations where name = 'Kilcoy & Burpengary Dental Group';
 
+set local role service_role;
 select lives_ok($sql$
   select public.ingest_basiq_snapshot(
     '12000000-0000-4000-8000-000000000001',
@@ -74,6 +75,7 @@ select lives_ok(
 );
 
 reset role;
+set local role service_role;
 select lives_ok($sql$
   select public.ingest_basiq_snapshot(
     '12000000-0000-4000-8000-000000000001',
@@ -125,6 +127,7 @@ select throws_ok(
 );
 
 reset role;
+set local role service_role;
 select lives_ok(
   $$select public.purge_basiq_data('12000000-0000-4000-8000-000000000001','11000000-0000-4000-8000-000000000001',false)$$,
   'Consent cleanup removes imported banking data'
