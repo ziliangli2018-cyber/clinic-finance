@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FinanceDataset, Organisation } from '../types/domain';
-import { advanceDemoDataset } from '../domain/simulation';
+import { advanceDemoDataset } from '@clinic-finance/demo-simulation';
 import { isMock } from '../services/supabase';
 import {
   loadDemoState,
@@ -9,6 +9,8 @@ import {
   type DemoState,
 } from '../services/demo-storage';
 import {
+  assignAccountToEntity,
+  createLiveOrganisation,
   listOrganisations,
   loadDataset,
   saveCategory,
@@ -27,6 +29,7 @@ export function useFinance() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [simulationMessage, setSimulationMessage] = useState('');
   const version = useRef(0);
+  const actionRunning = useRef(false);
   const demoState = useRef<DemoState | null>(null);
   const commitDemoState = useCallback((next: DemoState, message = '') => {
     demoState.current = next;
@@ -61,7 +64,7 @@ export function useFinance() {
     setData(null);
     try {
       if ((import.meta.env.VITE_DATA_MODE || 'mock') === 'mock') {
-        const { createMockDataset } = await import('../domain/mock');
+        const { createMockDataset } = await import('@clinic-finance/mock-dataset');
         const state = loadDemoState(createMockDataset());
         if (current !== version.current) return;
         demoState.current = state;
@@ -71,7 +74,10 @@ export function useFinance() {
         setOrganisations([state.dataset.organisation]);
       } else {
         const orgs = await listOrganisations();
-        const selected = orgs.find((org) => org.id === organisationId) || orgs[0];
+        const selected =
+          orgs.find((org) => org.id === organisationId) ||
+          orgs.find((org) => !org.isDemo) ||
+          orgs[0];
         const dataset = selected ? await loadDataset(selected) : null;
         if (current !== version.current) return;
         setOrganisations(orgs);
@@ -102,6 +108,8 @@ export function useFinance() {
     };
   }, [advanceDemo, loading, simulationPaused]);
   async function run(action: () => Promise<void>) {
+    if (actionRunning.current) return;
+    actionRunning.current = true;
     setBusy(true);
     setError('');
     try {
@@ -109,6 +117,7 @@ export function useFinance() {
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Unable to complete this action');
     } finally {
+      actionRunning.current = false;
       setBusy(false);
     }
   }
@@ -147,6 +156,28 @@ export function useFinance() {
       await refresh();
     });
   }
+  async function createLive(name: string) {
+    await run(async () => {
+      const id = await createLiveOrganisation(name.trim());
+      if (id === organisationId) await refresh();
+      else setOrganisationId(id);
+    });
+  }
+  async function assignAccount(accountId: string, entityId: string) {
+    await run(async () => {
+      await assignAccountToEntity(accountId, entityId);
+      setData((previous) =>
+        previous
+          ? {
+              ...previous,
+              accounts: previous.accounts.map((account) =>
+                account.id === accountId ? { ...account, entityId } : account,
+              ),
+            }
+          : previous,
+      );
+    });
+  }
   function toggleSimulation() {
     const current = demoState.current;
     if (!current) return;
@@ -155,7 +186,7 @@ export function useFinance() {
   }
   async function resetDemo() {
     await run(async () => {
-      const { createMockDataset } = await import('../domain/mock');
+      const { createMockDataset } = await import('@clinic-finance/mock-dataset');
       const state = resetDemoState(createMockDataset());
       commitDemoState(state, 'Demo restored to its original fixture.');
       setOrganisations([state.dataset.organisation]);
@@ -176,6 +207,8 @@ export function useFinance() {
     categorise,
     sync,
     createDemo,
+    createLive,
+    assignAccount,
     toggleSimulation,
     resetDemo,
   };

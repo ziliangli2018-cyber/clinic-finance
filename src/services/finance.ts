@@ -1,4 +1,5 @@
-import type { FinanceDataset, Organisation } from '../types/domain';
+import type { BankingStatus, FinanceDataset, Organisation } from '../types/domain';
+import { detectInternalTransfers } from '../domain/transfers';
 import { supabase } from './supabase';
 
 type Row = Record<string, unknown>;
@@ -38,13 +39,15 @@ export async function loadDataset(organisation: Organisation): Promise<FinanceDa
     readTable('categories'),
     readTable('transactions', organisation.id),
   ]);
+  const mappedAccounts = accounts.map(camel) as unknown as FinanceDataset['accounts'];
+  const mappedTransactions = transactions.map(camel) as unknown as FinanceDataset['transactions'];
   return {
     organisation,
     entities: entities.map(camel),
     connections: connections.map(camel),
-    accounts: accounts.map(camel),
+    accounts: mappedAccounts,
     categories: categories.map(camel),
-    transactions: transactions.map(camel),
+    transactions: detectInternalTransfers(mappedTransactions, mappedAccounts),
   } as unknown as FinanceDataset;
 }
 export async function seedDemo(name: string) {
@@ -54,12 +57,114 @@ export async function seedDemo(name: string) {
   await syncBank(data as string);
   return data as string;
 }
+
+export async function createLiveOrganisation(name: string) {
+  if (!supabase) throw new Error('Supabase is not configured');
+  const { data, error } = await supabase.rpc('create_live_organisation', { name });
+  if (error) throw new Error('The live workspace could not be created.');
+  if (typeof data !== 'string') throw new Error('The live workspace could not be created.');
+  return data;
+}
+
+/** Only Basiq's HTTPS consent application may receive a short-lived client token. */
+export function validateConsentUrl(value: unknown): string {
+  if (typeof value !== 'string') throw new Error('The bank consent link is unavailable.');
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error('The bank consent link is invalid.');
+  }
+  if (
+    url.origin !== 'https://consent.basiq.io' ||
+    url.pathname !== '/home' ||
+    url.username ||
+    url.password ||
+    url.hash
+  )
+    throw new Error('The bank consent link is invalid.');
+  return url.href;
+}
+
+export type BankingAction =
+  'status' | 'connect' | 'manage' | 'extend' | 'reauthorise' | 'disconnect';
+
+async function bankingAction(organisationId: string, action: BankingAction) {
+  if (!supabase) throw new Error('Supabase is not configured');
+  const { data, error } = await supabase.functions.invoke('bank-connect', {
+    body: { organisationId, action },
+  });
+  if (error)
+    throw new Error(
+      'Unable to update your bank connection. Try again or contact your workspace administrator.',
+    );
+  if (!data || typeof data !== 'object')
+    throw new Error('Bank connection response is unavailable.');
+  return data as Record<string, unknown>;
+}
+
+function validTimestamp(value: unknown): value is string | null {
+  return value === null || (typeof value === 'string' && Number.isFinite(Date.parse(value)));
+}
+
+export async function loadBankingStatus(organisationId: string): Promise<BankingStatus> {
+  const data = await bankingAction(organisationId, 'status');
+  const connectionStates = ['not_connected', 'pending', 'active', 'error', 'consent_required'];
+  const rowStates = ['pending', 'active', 'error', 'consent_required'];
+  if (
+    data.provider !== 'basiq' ||
+    typeof data.configured !== 'boolean' ||
+    typeof data.automaticSync !== 'boolean' ||
+    !connectionStates.includes(String(data.connectionState)) ||
+    !validTimestamp(data.lastSyncedAt) ||
+    !validTimestamp(data.consentExpiresAt) ||
+    !Array.isArray(data.connections) ||
+    !data.connections.every(
+      (row) =>
+        row &&
+        typeof row === 'object' &&
+        typeof row.id === 'string' &&
+        typeof row.institutionId === 'string' &&
+        typeof row.institutionName === 'string' &&
+        rowStates.includes(String(row.state)) &&
+        validTimestamp(row.lastSyncedAt) &&
+        validTimestamp(row.consentExpiresAt),
+    ) ||
+    (data.reason !== undefined && typeof data.reason !== 'string')
+  )
+    throw new Error('Bank connection status is unavailable. Please try again.');
+  return data as unknown as BankingStatus;
+}
+
+export async function bankingConsentUrl(
+  organisationId: string,
+  action: Exclude<BankingAction, 'status' | 'disconnect'>,
+) {
+  const data = await bankingAction(organisationId, action);
+  return validateConsentUrl(data.url);
+}
+
+export async function disconnectBank(organisationId: string) {
+  const data = await bankingAction(organisationId, 'disconnect');
+  if (data.disconnected !== true)
+    throw new Error('The bank connections could not be disconnected.');
+}
+
+export async function assignAccountToEntity(accountId: string, entityId: string) {
+  if (!supabase) throw new Error('Supabase is not configured');
+  const { error } = await supabase.rpc('set_account_entity', {
+    account_id: accountId,
+    entity_id: entityId,
+  });
+  if (error) throw new Error('The account assignment could not be saved.');
+}
+
 export async function syncBank(organisationId: string) {
   if (!supabase) throw new Error('Supabase is not configured');
   const { error } = await supabase.functions.invoke('bank-sync', { body: { organisationId } });
   if (error)
     throw new Error(
-      `Bank sync failed. Check the backend function deployment and demo data configuration. ${error.message}`,
+      'Bank refresh failed. Check the connection in Workspace settings and try again.',
     );
 }
 export async function saveCategory(transactionId: string, categoryId: string) {

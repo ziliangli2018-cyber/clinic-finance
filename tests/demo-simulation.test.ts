@@ -33,7 +33,7 @@ describe('deterministic demo activity', () => {
   it('adds a categorised posted transaction without mutating the input', () => {
     const seed = createMockDataset();
     const snapshot = JSON.stringify(seed);
-    const account = seed.accounts.find((candidate) => candidate.name === 'Clinic A operating')!;
+    const account = seed.accounts.find((candidate) => candidate.name === 'Kilcoy operating')!;
     const beforeBalance = account.balanceCents;
 
     // Sequence 1 is the patient-receipts activity in the fixed cycle.

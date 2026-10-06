@@ -11,6 +11,11 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
+    "baseUrl": ".",
+    "paths": {
+      "@clinic-finance/mock-dataset": ["src/domain/mock.ts"],
+      "@clinic-finance/demo-simulation": ["src/domain/simulation.ts"]
+    },
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,

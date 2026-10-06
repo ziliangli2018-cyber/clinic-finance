@@ -7,11 +7,11 @@ test('dashboard entity filters, period selection and responsive rendering', asyn
   await expect(page.getByRole('heading', { name: 'Financial overview' })).toBeVisible();
   await expect(page.locator('.metric-card')).toHaveCount(4);
   const before = await page.locator('.metric-value').first().textContent();
-  await page.getByRole('button', { name: 'Clinic A · Paddington', exact: true }).click();
+  await page.getByRole('button', { name: 'Kilcoy', exact: true }).click();
   expect(await page.locator('.metric-value').first().textContent()).not.toBe(before);
   await page.getByLabel('Reporting period').selectOption('90');
   await expect(page.getByText('Posted inflows · last 90 days')).toBeVisible();
-  await page.getByRole('button', { name: 'All clinics', exact: true }).click();
+  await page.getByRole('button', { name: 'All business', exact: true }).click();
   await page.screenshot({ path: '.artifacts/dashboard-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole('heading', { name: 'Financial overview' })).toBeVisible();
@@ -30,7 +30,7 @@ test('account links filter transactions and survive a Pages deep-link refresh', 
   page,
 }) => {
   await page.goto('./#/accounts');
-  await expect(page.locator('.account-card')).toHaveCount(6);
+  await expect(page.locator('.account-card')).toHaveCount(7);
   await page.locator('.account-card').first().getByRole('button', { name: 'Transactions' }).click();
   expect(page.url()).toContain('account=');
   await expect(page.getByLabel('Account filter')).not.toHaveValue('all');

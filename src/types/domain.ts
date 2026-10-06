@@ -9,7 +9,7 @@ export interface Entity {
   id: string;
   organisationId: string;
   name: string;
-  kind: 'clinic' | 'personal';
+  kind: 'clinic' | 'group' | 'personal';
 }
 
 export interface BankConnection {
@@ -17,8 +17,31 @@ export interface BankConnection {
   organisationId: string;
   entityId: string;
   provider: 'mock' | 'basiq';
-  status: 'active' | 'error' | 'disconnected';
+  status: 'pending' | 'active' | 'error' | 'consent_required' | 'disconnected';
   lastSyncedAt: string | null;
+  institutionId?: string | null;
+  institutionName?: string | null;
+  consentExpiresAt?: string | null;
+}
+
+export interface BankingConnectionStatus {
+  id: string;
+  institutionId: string;
+  institutionName: string;
+  state: 'pending' | 'active' | 'error' | 'consent_required';
+  lastSyncedAt: string | null;
+  consentExpiresAt: string | null;
+}
+
+export interface BankingStatus {
+  configured: boolean;
+  provider: 'basiq';
+  connectionState: 'not_connected' | 'pending' | 'active' | 'error' | 'consent_required';
+  connections: BankingConnectionStatus[];
+  lastSyncedAt: string | null;
+  consentExpiresAt: string | null;
+  automaticSync: boolean;
+  reason?: string;
 }
 
 export interface Account {
@@ -28,9 +51,11 @@ export interface Account {
   connectionId: string;
   name: string;
   institution: string;
-  kind: 'operating' | 'savings' | 'credit_card' | 'transaction';
+  kind:
+    'operating' | 'savings' | 'credit_card' | 'transaction' | 'loan' | 'mortgage' | 'term_deposit';
   currency: 'AUD';
   balanceCents: number;
+  availableFundsCents?: number | null;
   maskedNumber: string;
   updatedAt: string;
 }

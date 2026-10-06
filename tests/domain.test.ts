@@ -17,7 +17,8 @@ const base = createMockDataset();
 const clinicA = base.accounts[0];
 const reserveA = base.accounts[1];
 const clinicB = base.accounts[3];
-const personal = base.accounts[6];
+const practiceLoan = base.accounts[6];
+const personal = base.accounts[7];
 
 function entry(id: string, amountCents: number, overrides: Partial<Transaction> = {}): Transaction {
   return {
@@ -61,11 +62,16 @@ function transferLegs(): Transaction[] {
 }
 
 describe('deterministic fictitious ledger', () => {
-  it('covers exactly 90 days with 8 accounts, 2 clinics and personal, using consistent UUID relationships', () => {
+  it('covers exactly 90 days with 9 accounts, 2 clinics, group finance and personal, using consistent UUID relationships', () => {
     expect(createMockDataset()).toEqual(base);
-    expect(base.accounts).toHaveLength(8);
+    expect(base.accounts).toHaveLength(9);
     expect(base.entities.filter((entity) => entity.kind === 'clinic')).toHaveLength(2);
     expect(base.entities.filter((entity) => entity.kind === 'personal')).toHaveLength(1);
+    expect(base.entities.filter((entity) => entity.kind === 'group')).toHaveLength(1);
+    expect(base.accounts.find((account) => account.kind === 'loan')).toMatchObject({
+      institution: 'BOQ Specialist · Demo',
+      entityId: base.entities.find((entity) => entity.kind === 'group')?.id,
+    });
     expect(
       base.accounts
         .filter((account) => account.entityId === personal.entityId)
@@ -224,6 +230,25 @@ describe('cash-flow reporting', () => {
     });
   });
 
+  it('counts a loan repayment from cash once and excludes the liability-side mirror', () => {
+    const data = dataset([
+      entry('cash-loan-payment', -185_500, { description: 'BOQS PRACTICE LOAN REPAYMENT' }),
+      entry('loan-ledger-credit', 185_500, {
+        accountId: practiceLoan.id,
+        description: 'PRACTICE LOAN REPAYMENT RECEIVED',
+      }),
+    ]);
+    expect(calculateSummary(data)).toMatchObject({
+      incomeCents: 0,
+      expenseCents: 185_500,
+      netCashflowCents: -185_500,
+      transactionCount: 1,
+    });
+    expect(
+      calculateDailyCashflow(data).reduce((sum, point) => sum + point.netCashflowCents, 0),
+    ).toBe(-185_500);
+  });
+
   it('does not hide cash flow behind incomplete or invalid persisted pair flags', () => {
     const pairId = stableId('pair', 'invalid');
     const oneSided = dataset([entry('only', -700, { transferPairId: pairId })]);
@@ -336,9 +361,9 @@ describe('categorisation and provider safety', () => {
     );
   });
 
-  it('serves injected mock data and fails closed for an unconnected live provider', async () => {
+  it('serves injected mock data and blocks direct browser access to Basiq', async () => {
     await expect(new MockFinancialProvider(createMockDataset).loadDataset()).resolves.toEqual(base);
-    await expect(new BasiqFinancialProvider().loadDataset()).rejects.toThrow('not connected');
+    await expect(new BasiqFinancialProvider().loadDataset()).rejects.toThrow('server functions');
   });
   it('scopes provider operations to a connection and refuses disconnected reads', async () => {
     const provider = new MockFinancialProvider(createMockDataset);

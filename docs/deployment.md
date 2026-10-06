@@ -1,6 +1,6 @@
 # Local setup and GitHub Pages deployment
 
-Version 0.2 supports local development and a public, browser-only demonstration on GitHub Pages. The public demo uses deterministic fictional data, saves changes in local browser storage and contains no banking credentials. An optional hosted mode uses Supabase sign-in for organisation data. No live banking integration is enabled by these steps.
+Version 0.3 supports a public browser-only demonstration and a separately activated authenticated production site on GitHub Pages. The public demo uses deterministic fictional data, saves changes in local browser storage and contains no banking credentials. Production uses Supabase plus the Basiq functions described in the [production banking runbook](basiq-production-onboarding.md); source deployment alone does not authorise or connect a bank.
 
 ## 1. Run the browser demo
 
@@ -138,6 +138,8 @@ The workflow follows the official [GitHub Pages custom workflow requirements](ht
 | `deploy_env`                                               | Manual Pages workflow input      | `public-demo`, `hosted-demo` or `production`; pushes use `public-demo` |
 | `PAGES_BASE_PATH`                                          | GitHub repository variable       | Optional override for generated asset path                             |
 | `APP_ENV`, `ALLOW_MOCK_DATA`, `CORS_ALLOWED_ORIGINS`       | Edge Function environment        | Backend mode and accepted browser origins                              |
+| `BASIQ_ENABLED`, onboarding flag, allowed institutions     | Supabase Edge Function secrets   | Fail-closed provider activation                                        |
+| Basiq API key, business profile and scheduler secret       | Supabase Edge Function secrets   | Consent, provider access and daily scheduler authentication            |
 | Supabase service-role key and all provider/API credentials | Trusted backend environment only | Privileged server operations                                           |
 
 Every `VITE_*` value must be treated as public, even if entered in a GitHub “secret” field. Vite embeds frontend values in downloadable assets. CORS restricts browser origins; authentication, membership checks and RLS still enforce access.
@@ -174,11 +176,11 @@ where singleton = true;
 
 For a local preview of the hosted frontend, supply that project's public URL/key in an ignored `.env.hosted-demo.local`, then run `npm run build:hosted-demo`. If testing authenticated function calls locally, add the exact preview origin to the demo backend's allowed origins for that test and remove it afterward. See [banking integration](banking-integration.md) for the additional tenant and membership checks used by mock ingestion.
 
-### Future production deployment
+### Production deployment
 
-Apply migrations to a separate production project without the local seed or demo runtime SQL. Configure `APP_ENV=production`, `ALLOW_MOCK_DATA=false`, an exact browser-origin allowlist and production database runtime settings. Configure Auth, approved users and email delivery for that project, deploy the functions, then set GitHub's public URL/key variables and manually run the Pages workflow with `deploy_env=production`.
+Apply migrations to a separate production project without the local seed or demo runtime SQL. Configure `APP_ENV=production`, `ALLOW_MOCK_DATA=false`, an exact browser-origin allowlist, Auth and approved users. Deploy `bank-connect`, `bank-sync` and `bank-sync-scheduled`, then set GitHub's public URL/key variables and manually run the Pages workflow with `deploy_env=production`.
 
-Both hosted-demo and production builds fail closed when required public project configuration is missing or mock mode is requested. Neither uses the browser mock dataset at runtime or provides an unauthenticated workspace fallback. Production cannot provision demo organisations or refresh the mock provider. Until live provider onboarding is implemented and authorised, production may have no financial data; that is expected.
+Both hosted-demo and production builds fail closed when required public project configuration is missing or mock mode is requested. Neither uses the browser mock dataset at runtime or provides an unauthenticated fallback. Live consent remains disabled until the server-only Basiq gates are satisfied. Follow the [production banking runbook](basiq-production-onboarding.md) for secrets, scheduling, bank prerequisites and the mandatory three-account pilot.
 
 ## Project paths, deep links and custom domains
 
@@ -207,4 +209,4 @@ No route or component rewrite is required. Use the actual site URL reported by G
 | Hosted sign-in fails or no account exists         | Provision an approved Auth user, check its password/confirmation status and public project configuration; keep public signup disabled         |
 | Local Supabase cannot start                       | Docker running, sufficient disk space and the configured ports available                                                                      |
 
-Scheduled bank refresh, receipt workers and economic imports are not enabled in this release. Add them as trusted backend jobs with retries and audit records; never rely on an open browser tab to run them.
+The production banking scheduler endpoint is implemented but does not schedule itself. Configure one authenticated daily backend invocation as described in the runbook; never rely on an open browser tab. Receipt and economic-data workers remain placeholders.

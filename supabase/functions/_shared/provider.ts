@@ -105,8 +105,7 @@ export function bankProvider(
   allowMock: string | undefined,
   isDemo: boolean,
 ): BankProvider {
-  if (name === 'basiq')
-    throw new HttpError(501, 'Live bank integration is not available in version 0.1');
+  if (name === 'basiq') throw new HttpError(500, 'Basiq must use the dedicated production adapter');
   assertMockAllowed(environment, allowMock, isDemo);
   return {
     name: 'mock',

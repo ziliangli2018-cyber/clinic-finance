@@ -2,7 +2,7 @@ import type { FinanceDataset } from '../types/domain.ts';
 import { dateValue } from '../domain/dates.ts';
 
 export const DEMO_STORAGE_KEY = 'clinic-finance.demo-state';
-export const DEMO_STORAGE_VERSION = 1 as const;
+export const DEMO_STORAGE_VERSION = 2 as const;
 
 export interface DemoState {
   dataset: FinanceDataset;
@@ -84,7 +84,7 @@ function isDataset(value: unknown, expectedOrganisationId?: string): value is Fi
       (row) =>
         row.organisationId === organisation.id &&
         isString(row.name) &&
-        (row.kind === 'clinic' || row.kind === 'personal'),
+        (row.kind === 'clinic' || row.kind === 'group' || row.kind === 'personal'),
     )
   )
     return false;
@@ -95,7 +95,9 @@ function isDataset(value: unknown, expectedOrganisationId?: string): value is Fi
         isString(row.entityId) &&
         entityIds.has(row.entityId) &&
         (row.provider === 'mock' || row.provider === 'basiq') &&
-        (row.status === 'active' || row.status === 'error' || row.status === 'disconnected') &&
+        ['pending', 'active', 'error', 'consent_required', 'disconnected'].includes(
+          String(row.status),
+        ) &&
         (row.lastSyncedAt === null || isTimestamp(row.lastSyncedAt)),
     )
   )
@@ -110,7 +112,15 @@ function isDataset(value: unknown, expectedOrganisationId?: string): value is Fi
         connectionIds.has(row.connectionId) &&
         isString(row.name) &&
         isString(row.institution) &&
-        ['operating', 'savings', 'credit_card', 'transaction'].includes(String(row.kind)) &&
+        [
+          'operating',
+          'savings',
+          'credit_card',
+          'transaction',
+          'loan',
+          'mortgage',
+          'term_deposit',
+        ].includes(String(row.kind)) &&
         row.currency === 'AUD' &&
         typeof row.balanceCents === 'number' &&
         Number.isSafeInteger(row.balanceCents) &&

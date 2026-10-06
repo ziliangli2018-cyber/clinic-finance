@@ -9,19 +9,22 @@ This is an early functional foundation, not a production security certification.
 - Narrow security-definer functions with an empty `search_path`, schema-qualified application objects and explicit EXECUTE grants.
 - Category mutations require owner/admin membership and create an audit event. Viewers cannot change categories or read the editor audit trail.
 - Edge handlers validate JWTs with `auth.getUser(token)` and independently check membership. `organisationId` from the browser is only a requested scope, never proof of authority.
-- Service-role credentials remain inside Edge Functions. Authenticated users cannot execute ingestion or read raw provider records/runtime flags. No provider credentials exist in the mock implementation.
+- Service-role and Basiq credentials remain inside Edge Functions. Authenticated users cannot execute ingestion or read private provider users/connections, raw mock records or runtime flags.
 - Atomic mock ingestion repeats authorization, applies idempotent transaction keys and preserves manual category choices.
 - Multiple explicit mock gates fail closed, including a default production/mock-disabled database configuration.
+- Multiple independent live-provider gates fail closed. Institution IDs are allowlisted, provider pagination cannot leave Basiq's origin/user scope, and only masked account identifiers are persisted.
+- Manual bank refresh has a database-enforced cooldown. Scheduled sync uses a separate high-entropy header secret and is never invoked by frontend code.
+- Consent expiry/revocation deletes imported bank data; explicit disconnection revokes provider access before deleting the private profile.
 - Private receipt storage, 10 MiB limit and a restricted MIME allowlist. Tenant members may read objects under their organisation prefix; upload/update/delete are not exposed in 0.1.
 - Explicit allowed CORS origins; no wildcard credentialed origin. Responses disable caching. Server errors do not disclose financial payloads, secrets or JWTs.
 
 ## Deployment configuration
 
-The source repository is public. The GitHub Pages workflow only supports `hosted-demo` or `production`, both of which require an HTTPS Supabase endpoint and public project key. Signed-out visitors see a sign-in screen; no financial data is loaded before authentication. The local browser-only demo is never a Pages deployment option. Hosting configuration errors stop the build instead of bypassing sign-in. Do not put a shared password, password hash, access token or private records in source code or a frontend build variable.
+The source repository is public. The default GitHub Pages workflow publishes `public-demo` with fictional browser data and no backend. Manually selected `hosted-demo` or `production` builds require an HTTPS Supabase endpoint and public project key; signed-out visitors see a sign-in screen and no financial data loads before authentication. Hosting configuration errors stop the build instead of bypassing sign-in. Do not put a shared password, password hash, access token or private records in source code or a frontend build variable.
 
 Hosted builds do not offer public registration. Disable new-user signup in the hosted Supabase Auth service as well; hiding the form alone is not an access control. Provision the owner's account through the Supabase administration flow and let the owner set their own password. Organisation membership and RLS still enforce record access even if an unrecognised account were created. Keep real financial data out of the separate hosted demo project.
 
-`VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are public client configuration. They are safe to ship only because RLS and server authorization enforce access. The service-role key bypasses RLS and must never appear in `VITE_*`, static bundles, checked-in files, browser storage, logs or screenshots. Keep future bank/OCR provider secrets in backend secret storage.
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are public client configuration. They are safe to ship only because RLS and server authorization enforce access. The service-role key bypasses RLS and must never appear in `VITE_*`, static bundles, checked-in files, browser storage, logs or screenshots. Basiq API keys, business profiles and the scheduler secret must stay in Supabase backend secret storage and never use a `VITE_*` name.
 
 Use a dedicated Supabase project for demo data and a different project for production. Apply only migrations to production; local `seed.sql` explicitly enables mock mode and must not be applied there. Keep the production runtime config at its migration defaults and set Edge `APP_ENV=production`, `ALLOW_MOCK_DATA=false`. Limit `CORS_ALLOWED_ORIGINS` to the actual deployed frontend origin. Configure Supabase Auth Site URL and redirect allowlist for the deployed frontend; hash routes do not need broad wildcard URL allowances.
 
@@ -29,7 +32,7 @@ Use a dedicated Supabase project for demo data and a different project for produ
 
 ## Before real financial data
 
-Complete threat modelling, an independent security review, deployment access/MFA policy, key rotation/revocation process, backup/restore testing, incident response, retention/deletion rules and application rate limiting. Define who can invite members and change roles before implementing a membership admin UI. Current membership provisioning is an administrator-controlled database operation. Add operational monitoring and durable failed-job handling; error responses currently provide safe failure reporting but no external alerting.
+Complete Basiq commercial/security and CDR access-model approval, threat modelling, an independent security review, deployment access/MFA policy, key rotation/revocation, backup/restore testing, incident response, retention/deletion and application rate limiting. Define who can invite members and change roles. Configure alerts for scheduler failures and expiring consent. Follow the [production banking runbook](basiq-production-onboarding.md); passing repository tests is not permission to process live CDR data.
 
 Receipt storage has access controls but no upload or OCR workflow. No malware scanning or document extraction is implemented. No patient identifiers should be ingested. Economic indicators and forecasting are empty foundations; demo assumptions are not authenticated external observations or accounting/tax guidance.
 

@@ -31,12 +31,12 @@ Deno.test('stable identifiers are deterministic and isolated by tenant', async (
     throw new Error('Invalid UUID');
 });
 
-Deno.test('live provider remains explicitly unimplemented', () => {
+Deno.test('the mock-provider factory cannot bypass the dedicated Basiq adapter', () => {
   let rejected = false;
   try {
     bankProvider('basiq', 'production', 'false', false);
   } catch (error) {
-    rejected = error instanceof Error && error.message.includes('not available');
+    rejected = error instanceof Error && error.message.includes('dedicated production adapter');
   }
-  if (!rejected) throw new Error('Live provider must not claim implementation');
+  if (!rejected) throw new Error('Basiq was routed through the mock-provider factory');
 });
