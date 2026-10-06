@@ -221,18 +221,18 @@ create function public.ingest_basiq_snapshot(
 language plpgsql security definer set search_path = '' as $$
 #variable_conflict use_column
 declare
-  organisation_id uuid;
+  target_organisation_id uuid;
   group_entity_id uuid;
   job_id uuid;
   account_count integer := 0;
   transaction_count integer := 0;
 begin
-  select p.organisation_id into organisation_id
+  select p.organisation_id into target_organisation_id
   from private.banking_profiles p where p.id = profile_id for update;
   if not found then raise exception 'Banking profile unavailable' using errcode = '42501'; end if;
   if actor_user_id is not null and not exists (
     select 1 from public.organisation_members m
-    where m.organisation_id = ingest_basiq_snapshot.organisation_id
+    where m.organisation_id = target_organisation_id
       and m.user_id = actor_user_id and m.role in ('owner', 'admin')
   ) then raise exception 'Editor membership required' using errcode = '42501'; end if;
   if jsonb_typeof(dataset->'connections') <> 'array'
@@ -242,7 +242,7 @@ begin
   end if;
 
   select e.id into group_entity_id from public.entities e
-  where e.organisation_id = ingest_basiq_snapshot.organisation_id and e.kind = 'group'
+  where e.organisation_id = target_organisation_id and e.kind = 'group'
   order by e.id limit 1;
   if group_entity_id is null then
     raise exception 'Group finance entity unavailable' using errcode = '55000';
@@ -251,19 +251,19 @@ begin
   if exists (
     select 1 from jsonb_to_recordset(dataset->'connections') x(id uuid)
     join public.bank_connections c on c.id = x.id
-    where c.organisation_id <> ingest_basiq_snapshot.organisation_id or c.provider <> 'basiq'
+    where c.organisation_id <> target_organisation_id or c.provider <> 'basiq'
   ) or exists (
     select 1 from jsonb_to_recordset(dataset->'accounts') x(id uuid)
     join public.accounts a on a.id = x.id
-    where a.organisation_id <> ingest_basiq_snapshot.organisation_id
+    where a.organisation_id <> target_organisation_id
   ) or exists (
     select 1 from jsonb_to_recordset(dataset->'transactions') x(id uuid)
     join public.transactions t on t.id = x.id
-    where t.organisation_id <> ingest_basiq_snapshot.organisation_id
+    where t.organisation_id <> target_organisation_id
   ) then raise exception 'Banking identifier collision' using errcode = '22023'; end if;
 
   insert into public.processing_jobs(organisation_id, kind, status)
-  values (organisation_id, 'bank_sync', 'running') returning id into job_id;
+  values (target_organisation_id, 'bank_sync', 'running') returning id into job_id;
 
   -- Connections removed at the provider are removed locally even when another
   -- institution remains active for the same business user.
@@ -285,7 +285,7 @@ begin
     id, organisation_id, entity_id, provider, status, last_synced_at,
     institution_id, institution_name, consent_expires_at
   )
-  select x.id, organisation_id, group_entity_id, 'basiq', x.status, x.last_synced_at,
+  select x.id, target_organisation_id, group_entity_id, 'basiq', x.status, x.last_synced_at,
     x.institution_id, x.institution_name, x.consent_expires_at
   from jsonb_to_recordset(dataset->'connections') as x(
     id uuid, provider_connection_id text, institution_id text, institution_name text,
@@ -312,7 +312,7 @@ begin
   -- imported accounts without disturbing another active institution.
   delete from public.accounts a
   using public.bank_connections c
-  where a.organisation_id = ingest_basiq_snapshot.organisation_id
+  where a.organisation_id = target_organisation_id
     and a.connection_id = c.id
     and c.provider = 'basiq'
     and exists (
@@ -324,7 +324,7 @@ begin
   -- account snapshot. Remove its retained copy and cascade its transactions.
   delete from public.accounts a
   using public.bank_connections c
-  where a.organisation_id = ingest_basiq_snapshot.organisation_id
+  where a.organisation_id = target_organisation_id
     and a.connection_id = c.id
     and c.provider = 'basiq'
     and exists (
@@ -340,7 +340,7 @@ begin
     id, organisation_id, entity_id, connection_id, name, institution, kind,
     currency, balance_cents, available_funds_cents, masked_number, updated_at
   )
-  select x.id, organisation_id, group_entity_id, x.connection_id, x.name, x.institution,
+  select x.id, target_organisation_id, group_entity_id, x.connection_id, x.name, x.institution,
     x.kind, 'AUD', x.balance_cents, x.available_funds_cents, x.masked_number, x.updated_at
   from jsonb_to_recordset(dataset->'accounts') as x(
     id uuid, connection_id uuid, name text, institution text, kind text,
@@ -363,7 +363,7 @@ begin
     description, merchant, amount_cents, currency, category_id, category_source,
     status, transfer_pair_id, receipt_status
   )
-  select x.id, organisation_id, x.account_id, x.provider_transaction_id, x.posted_at,
+  select x.id, target_organisation_id, x.account_id, x.provider_transaction_id, x.posted_at,
     x.description, x.merchant, x.amount_cents, 'AUD', x.category_id,
     coalesce(x.category_source, 'uncategorised'),
     x.status, null, case when x.amount_cents < 0 then 'missing' else 'not_required' end
@@ -389,7 +389,7 @@ begin
   -- pending rows no longer present in the complete provider snapshot.
   delete from public.transactions t
   using public.accounts a
-  where t.organisation_id = ingest_basiq_snapshot.organisation_id
+  where t.organisation_id = target_organisation_id
     and t.account_id = a.id
     and t.status = 'pending'
     and a.connection_id in (
@@ -406,7 +406,7 @@ begin
   update public.processing_jobs set status = 'succeeded', finished_at = now() where id = job_id;
   insert into public.audit_events(organisation_id, actor_user_id, action, resource_id, metadata)
   values (
-    organisation_id,
+    target_organisation_id,
     actor_user_id,
     'bank.basiq_synced',
     job_id,
@@ -432,28 +432,28 @@ create function public.purge_basiq_data(
   remove_profile boolean default false
 ) returns void
 language plpgsql security definer set search_path = '' as $$
-declare organisation_id uuid;
+declare target_organisation_id uuid;
 begin
-  select p.organisation_id into organisation_id
+  select p.organisation_id into target_organisation_id
   from private.banking_profiles p where p.id = profile_id for update;
   if not found then return; end if;
   if actor_user_id is not null and not exists (
     select 1 from public.organisation_members m
-    where m.organisation_id = purge_basiq_data.organisation_id
+    where m.organisation_id = target_organisation_id
       and m.user_id = actor_user_id and m.role in ('owner', 'admin')
   ) then raise exception 'Editor membership required' using errcode = '42501'; end if;
 
   delete from public.bank_connections c
   using private.provider_connections pc
   where pc.profile_id = purge_basiq_data.profile_id and c.id = pc.connection_id
-    and c.organisation_id = purge_basiq_data.organisation_id and c.provider = 'basiq';
+    and c.organisation_id = target_organisation_id and c.provider = 'basiq';
   delete from private.provider_connections pc where pc.profile_id = purge_basiq_data.profile_id;
   if remove_profile then
     delete from private.banking_profiles p where p.id = purge_basiq_data.profile_id;
   end if;
   insert into public.audit_events(organisation_id, actor_user_id, action, resource_id, metadata)
   values (
-    organisation_id,
+    target_organisation_id,
     actor_user_id,
     case when remove_profile then 'bank.basiq_disconnected' else 'bank.basiq_data_purged' end,
     profile_id,
