@@ -34,6 +34,7 @@ export interface BankingConnectionStatus {
 }
 
 export interface BankingStatus {
+  entityId: string;
   configured: boolean;
   provider: 'basiq';
   connectionState: 'not_connected' | 'pending' | 'active' | 'error' | 'consent_required';

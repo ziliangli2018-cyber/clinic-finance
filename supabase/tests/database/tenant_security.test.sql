@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(31);
+select plan(32);
 
 insert into auth.users(id, email) values
   ('10000000-0000-4000-8000-000000000001','owner-a@example.invalid'),
@@ -80,7 +80,15 @@ set local role authenticated;
 select is(public.create_demo_organisation('Retry demo'),'20000000-0000-4000-8000-000000000001'::uuid,'Repeated onboarding returns owned demo organisation');
 reset role;
 select ok((select not public from storage.buckets where id='receipts'),'Receipt bucket is private');
-select is((select count(*) from pg_policies where schemaname='public' and cmd in ('INSERT','UPDATE','DELETE','ALL')),0::bigint,'No broad browser write policies');
+select is((select count(*) from pg_policies where schemaname='public' and tablename <> 'finance_plans' and cmd in ('INSERT','UPDATE','DELETE','ALL')),0::bigint,'Bank and tenant records have no broad browser write policies');
+select is(
+  (select string_agg((policyname::text || ':' || cmd::text) collate "C", ',' order by policyname)
+    from pg_policies
+    where schemaname='public' and tablename='finance_plans' and cmd in ('INSERT','UPDATE','DELETE','ALL')
+  ),
+  'editor_delete:DELETE,editor_insert:INSERT,editor_update:UPDATE',
+  'Only user-managed finance plans have deliberate editor write policies'
+);
 select is((select count(*) from pg_tables where schemaname in ('public','private') and not rowsecurity),0::bigint,'All application tables have RLS enabled');
 select * from finish();
 rollback;

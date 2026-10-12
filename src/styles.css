@@ -1,17 +1,335 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;550;600;650;700&family=Manrope:wght@400;500;600;650;700;750;800&display=swap');
 
+.portfolio-hero {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  border: 1px solid #eadde6;
+  border-radius: 22px;
+  overflow: hidden;
+  margin-bottom: 20px;
+  background: #fff;
+}
+.portfolio-total {
+  padding: 30px 32px;
+  background: #35253c;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+.portfolio-total::after {
+  content: '';
+  position: absolute;
+  width: 230px;
+  height: 230px;
+  border: 45px solid #ef629633;
+  border-radius: 50%;
+  right: -135px;
+  top: -110px;
+  pointer-events: none;
+}
+.portfolio-kicker {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  color: #ff9bbf;
+  font-size: 0.68rem;
+  letter-spacing: 1.7px;
+  font-weight: 700;
+}
+.portfolio-total h2 {
+  font-size: 1.7rem;
+  margin: 15px 0 25px;
+  letter-spacing: -0.8px;
+}
+.portfolio-net-label {
+  color: #d6cbd9;
+  font-size: 0.8rem;
+}
+.portfolio-net {
+  display: block;
+  font-family: 'Manrope', sans-serif;
+  font-size: clamp(2.05rem, 3.5vw, 3.3rem);
+  line-height: 1.3;
+  letter-spacing: -1.6px;
+  margin: 4px 0 18px;
+}
+.portfolio-split {
+  display: flex;
+  gap: 34px;
+  border-top: 1px solid #ffffff20;
+  padding-top: 15px;
+}
+.portfolio-split span {
+  color: #d4c7d7;
+  font-size: 0.76rem;
+}
+.portfolio-split b {
+  display: block;
+  margin-top: 5px;
+  color: #fff;
+  font-size: 1rem;
+}
+.portfolio-total > small {
+  display: block;
+  color: #c1afc5;
+  font-size: 0.67rem;
+  margin-top: 18px;
+  line-height: 1.5;
+}
+.portfolio-accounts {
+  padding: 29px 27px 20px;
+  min-width: 0;
+}
+.portfolio-account-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 13px;
+}
+.portfolio-account-heading a {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.8rem;
+  color: #b52b61;
+  font-weight: 600;
+}
+.portfolio-account {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 0;
+  border-bottom: 1px solid var(--border);
+}
+.portfolio-account:hover {
+  background: #fff7fa;
+}
+.portfolio-account > span:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+}
+.portfolio-account b {
+  font-size: 0.87rem;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.portfolio-account small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.7rem;
+  margin-top: 5px;
+}
+.portfolio-account > strong {
+  font-size: 0.94rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.portfolio-bank {
+  display: grid;
+  place-items: center;
+  width: 39px;
+  height: 39px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: #f0e8f4;
+  color: #765183;
+}
+.portfolio-bank.nab {
+  background: #ffe9e9;
+  color: #c44747;
+}
+.portfolio-connect {
+  font-size: 0.78rem;
+  display: block;
+  text-align: center;
+  color: #b52b61;
+  font-weight: 650;
+  padding: 17px 0 0;
+}
+.selection-cell {
+  width: 42px;
+  text-align: center;
+}
+.selection-cell input {
+  accent-color: #b52b61;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+.amount-filter {
+  display: grid;
+  gap: 5px;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.amount-filter input {
+  width: 105px;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 10px;
+  color: var(--text);
+}
+.bulk-category-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 22px;
+  border-bottom: 1px solid var(--border);
+  background: #fff7fa;
+  font-size: 0.8rem;
+}
+.bulk-category-toolbar select {
+  max-width: 280px;
+}
+.transaction-feedback {
+  margin: 0;
+  padding: 12px 22px;
+  font-size: 0.8rem;
+  color: #35735a;
+  background: #edf7f2;
+}
+.matching-category-option {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 0.8rem;
+  margin: 16px 0;
+  padding: 14px;
+  background: #fbf5f9;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+.matching-category-option input {
+  margin-top: 3px;
+  accent-color: #b52b61;
+}
+.matching-category-option span small {
+  display: block;
+  color: var(--muted);
+  margin-top: 5px;
+  line-height: 1.6;
+}
+.plan-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0 0 24px;
+}
+.plan-shortcuts > a {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+  padding: 18px;
+  transition:
+    border-color 0.15s,
+    transform 0.15s;
+  min-width: 0;
+}
+.plan-shortcuts > a:hover {
+  border-color: #ee9fba;
+  transform: translateY(-2px);
+}
+.shortcut-icon {
+  width: 43px;
+  height: 43px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  color: #b52b61;
+  background: #fff0f5;
+}
+.plan-shortcuts a:nth-child(2) .shortcut-icon {
+  color: #377b70;
+  background: #e8f5f0;
+}
+.plan-shortcuts a:nth-child(3) .shortcut-icon {
+  color: #7651a2;
+  background: #f3ecfb;
+}
+.plan-shortcuts b {
+  display: block;
+  font-size: 0.85rem;
+}
+.plan-shortcuts small {
+  display: block;
+  margin-top: 5px;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.plan-shortcuts > a > svg {
+  margin-left: auto;
+  color: #ad9bac;
+  flex-shrink: 0;
+}
+@media (max-width: 1100px) {
+  .portfolio-total {
+    padding: 27px 24px;
+  }
+  .portfolio-accounts {
+    padding: 26px 20px 15px;
+  }
+  .plan-shortcuts {
+    gap: 10px;
+  }
+  .plan-shortcuts > a {
+    padding: 14px;
+    gap: 10px;
+  }
+  .plan-shortcuts > a > svg {
+    display: none;
+  }
+}
+@media (max-width: 700px) {
+  .portfolio-hero {
+    grid-template-columns: 1fr;
+    border-radius: 18px;
+  }
+  .portfolio-total {
+    padding: 25px;
+  }
+  .portfolio-total h2 {
+    font-size: 1.55rem;
+    margin-bottom: 18px;
+  }
+  .portfolio-net {
+    font-size: 2.55rem;
+  }
+  .portfolio-accounts {
+    padding: 23px 21px 18px;
+  }
+  .plan-shortcuts {
+    grid-template-columns: 1fr;
+  }
+  .plan-shortcuts > a {
+    padding: 15px 18px;
+  }
+  .plan-shortcuts > a > svg {
+    display: block;
+  }
+}
+
 :root {
   font-family: 'DM Sans', sans-serif;
-  color: #223b46;
-  background: #f6f8fa;
+  color: #35253c;
+  background: #faf7f9;
   font-synthesis: none;
   font-weight: 400;
   font-size: 14px;
-  --navy: #173b48;
-  --green: #26775c;
-  --text: #223b46;
-  --muted: #7c8b94;
-  --border: #e8edf0;
+  --navy: #35253c;
+  --green: #b52b61;
+  --text: #35253c;
+  --muted: #827988;
+  --border: #eee6eb;
   --surface: #fff;
 }
 * {
@@ -127,7 +445,8 @@ p {
   inset: 0 auto 0 0;
   display: flex;
   flex-direction: column;
-  padding: 34px 22px 20px;
+  padding: 25px 18px 16px;
+  overflow-y: auto;
   z-index: 20;
 }
 .brand {
@@ -145,7 +464,7 @@ p {
 }
 .brand-icon {
   background: var(--navy);
-  color: #bdeacb;
+  color: #ff93ba;
   width: 35px;
   height: 35px;
   display: grid;
@@ -157,8 +476,8 @@ p {
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 16px 0 24px;
-  margin: 30px 0 12px;
+  padding: 12px 0 18px;
+  margin: 22px 0 10px;
   border-bottom: 1px solid var(--border);
 }
 .workspace-avatar {
@@ -191,7 +510,7 @@ p {
 }
 .sidebar nav {
   display: grid;
-  gap: 7px;
+  gap: 4px;
 }
 .sidebar nav a {
   display: flex;
@@ -199,7 +518,7 @@ p {
   gap: 13px;
   border-radius: 7px;
   color: #73848e;
-  padding: 13px 14px;
+  padding: 11px 14px;
   font-size: 0.93rem;
   font-weight: 500;
 }
@@ -207,8 +526,8 @@ p {
   stroke-width: 1.7;
 }
 .sidebar nav a.active {
-  color: #27634f;
-  background: #ecf4f0;
+  color: #b52b61;
+  background: #fff0f5;
   font-weight: 650;
 }
 .sidebar nav a:hover {
@@ -216,9 +535,10 @@ p {
 }
 .sidebar-lower {
   margin-top: auto;
-  padding-top: 35px;
+  padding-top: 22px;
 }
 .workspace-note {
+  display: none;
   padding: 16px;
   background: #f7f9fa;
   border: 1px solid #edf1f3;
@@ -373,11 +693,11 @@ p {
   background: #f2f6f7;
 }
 .button.primary {
-  background: var(--navy);
+  background: #b52b61;
   color: #fff;
 }
 .button.primary:hover {
-  background: #235565;
+  background: #96224f;
 }
 .text-button {
   border: 0;
@@ -385,7 +705,7 @@ p {
   padding: 0;
   font-size: 0.8rem;
   font-weight: 600;
-  color: #417663;
+  color: #b52b61;
   display: inline-flex;
   gap: 9px;
   align-items: center;
@@ -404,7 +724,7 @@ p {
   display: flex;
   gap: 3px;
   padding: 4px;
-  background: #eaf0f2;
+  background: #efe9ee;
   border-radius: 7px;
 }
 .entity-tabs button {
@@ -1144,6 +1464,17 @@ select {
   background: #fff2ef;
   color: #964d43;
 }
+.banking-ownership-note,
+.account-ownership-lock {
+  margin: 14px 0 0;
+  color: #6f838e;
+  font-size: 0.75rem;
+  line-height: 1.55;
+}
+.banking-ownership-note {
+  border-left: 3px solid #b8c8c1;
+  padding-left: 11px;
+}
 .banking-details {
   margin: 18px 0;
 }
@@ -1185,13 +1516,8 @@ select {
   font-size: 0.84rem;
   line-height: 1.65;
 }
-.account-assignment {
-  display: block;
-  margin: 16px 0 0;
-  color: #6f838e;
-}
-.account-assignment select {
-  padding: 8px 10px;
+.account-ownership-lock {
+  margin-top: 16px;
 }
 dl {
   margin: 25px 0;

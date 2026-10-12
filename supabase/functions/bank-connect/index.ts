@@ -1,10 +1,13 @@
 import { authenticate, authoriseEditor } from '../_shared/auth.ts';
-import { basiqConfig, configuredBasiq } from '../_shared/basiq.ts';
+import { basiqConfig, businessProfileFor, configuredBasiq } from '../_shared/basiq.ts';
+import { disconnectBankingProfile } from '../_shared/banking-profile.ts';
 import { failure, HttpError, preflight, response } from '../_shared/http.ts';
 
 type Action = 'status' | 'connect' | 'manage' | 'extend' | 'reauthorise' | 'disconnect';
 
-async function requestBody(request: Request): Promise<{ organisationId: string; action: Action }> {
+async function requestBody(
+  request: Request,
+): Promise<{ organisationId: string; entityId: string; action: Action }> {
   if (!request.headers.get('content-type')?.includes('application/json'))
     throw new HttpError(415, 'JSON body required');
   const raw = await request.text();
@@ -16,6 +19,7 @@ async function requestBody(request: Request): Promise<{ organisationId: string; 
     throw new HttpError(400, 'Invalid JSON');
   }
   const organisationId = value.organisationId;
+  const entityId = value.entityId;
   const action = value.action;
   if (
     typeof organisationId !== 'string' ||
@@ -23,10 +27,15 @@ async function requestBody(request: Request): Promise<{ organisationId: string; 
   )
     throw new HttpError(400, 'A valid organisationId is required');
   if (
+    typeof entityId !== 'string' ||
+    !/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(entityId)
+  )
+    throw new HttpError(400, 'A valid entityId is required');
+  if (
     !['status', 'connect', 'manage', 'extend', 'reauthorise', 'disconnect'].includes(String(action))
   )
     throw new HttpError(400, 'Invalid banking action');
-  return { organisationId, action: action as Action };
+  return { organisationId, entityId, action: action as Action };
 }
 
 export async function handler(request: Request): Promise<Response> {
@@ -34,20 +43,28 @@ export async function handler(request: Request): Promise<Response> {
   if (early) return early;
   try {
     const context = await authenticate(request);
-    const { organisationId, action } = await requestBody(request);
+    const { organisationId, entityId, action } = await requestBody(request);
     await authoriseEditor(context, organisationId);
-    const { data: organisation, error: organisationError } = await context.admin
-      .from('organisations')
-      .select('id,is_demo')
-      .eq('id', organisationId)
+    const { data: entity, error: entityError } = await context.admin
+      .from('entities')
+      .select('id,name,kind,organisation_id,organisations!inner(is_demo)')
+      .eq('id', entityId)
+      .eq('organisation_id', organisationId)
       .single();
-    if (organisationError || !organisation || organisation.is_demo)
-      throw new HttpError(403, 'Live organisation unavailable');
+    const organisation = entity?.organisations as unknown as { is_demo?: boolean } | undefined;
+    if (
+      entityError ||
+      !entity ||
+      organisation?.is_demo !== false ||
+      !['clinic', 'group'].includes(String(entity.kind))
+    )
+      throw new HttpError(403, 'Live legal entity unavailable');
 
     const config = basiqConfig();
     if (!config) {
       if (action !== 'status') throw new HttpError(503, 'Connected banking setup is incomplete');
       return response(request, 200, {
+        entityId,
         configured: false,
         provider: 'basiq',
         connectionState: 'not_connected',
@@ -61,30 +78,52 @@ export async function handler(request: Request): Promise<Response> {
 
     const { data: profileRows, error: profileError } = await context.admin.rpc(
       'get_basiq_profile',
-      { organisation_id: organisationId, actor_user_id: context.user.id },
+      {
+        organisation_id: organisationId,
+        entity_id: entityId,
+        actor_user_id: context.user.id,
+      },
     );
     if (profileError) throw new HttpError(503, 'Unable to read banking profile');
     let profile = Array.isArray(profileRows) ? profileRows[0] : null;
     const basiq = configuredBasiq(config);
+    const onboardingProfile = businessProfileFor(config, entityId);
+
+    if (!profile && !onboardingProfile) {
+      if (action !== 'status')
+        throw new HttpError(503, 'Verified legal-entity onboarding is incomplete');
+      return response(request, 200, {
+        entityId,
+        configured: false,
+        provider: 'basiq',
+        connectionState: 'not_connected',
+        connections: [],
+        lastSyncedAt: null,
+        consentExpiresAt: null,
+        automaticSync: config.automaticSync,
+        reason: `Verified business onboarding for ${String(entity.name)} is still required.`,
+      });
+    }
 
     if (action === 'disconnect') {
-      if (!profile) return response(request, 200, { disconnected: true });
-      await basiq.disconnect(String(profile.provider_user_id));
-      const { error } = await context.admin.rpc('purge_basiq_data', {
-        profile_id: profile.profile_id,
-        actor_user_id: context.user.id,
-        remove_profile: true,
-      });
-      if (error) throw new Error('Banking cleanup failed');
-      return response(request, 200, { disconnected: true });
+      if (!profile) return response(request, 200, { entityId, disconnected: true });
+      await disconnectBankingProfile(
+        String(profile.provider_user_id),
+        String(profile.profile_id),
+        context.user.id,
+        (providerUserId) => basiq.disconnect(providerUserId),
+        (args) => context.admin.rpc('purge_basiq_data', args),
+      );
+      return response(request, 200, { entityId, disconnected: true });
     }
 
     if (action === 'connect' && !profile) {
       const email = context.user.email;
       if (!email) throw new HttpError(400, 'A verified account email is required');
-      const providerUserId = await basiq.createUser(email);
+      const providerUserId = await basiq.createUser(email, onboardingProfile!);
       const { data: profileId, error } = await context.admin.rpc('save_basiq_profile', {
         organisation_id: organisationId,
+        entity_id: entityId,
         actor_user_id: context.user.id,
         provider_user_id: providerUserId,
       });
@@ -102,12 +141,14 @@ export async function handler(request: Request): Promise<Response> {
     if (action !== 'status') {
       if (!profile) throw new HttpError(409, 'Connect a bank before managing consent');
       return response(request, 200, {
+        entityId,
         url: await basiq.consentUrl(String(profile.provider_user_id), action),
       });
     }
 
     if (!profile)
       return response(request, 200, {
+        entityId,
         configured: true,
         provider: 'basiq',
         connectionState: 'not_connected',
@@ -122,6 +163,7 @@ export async function handler(request: Request): Promise<Response> {
       .from('bank_connections')
       .select('id,last_synced_at')
       .eq('organisation_id', organisationId)
+      .eq('entity_id', entityId)
       .eq('provider', 'basiq');
     if (storedError) throw new HttpError(503, 'Unable to read stored connections');
     const lastSyncedById = new Map(
@@ -151,6 +193,7 @@ export async function handler(request: Request): Promise<Response> {
     }
 
     return response(request, 200, {
+      entityId,
       configured: true,
       provider: 'basiq',
       connectionState: remote.connectionState,

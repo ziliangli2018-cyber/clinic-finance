@@ -7,21 +7,22 @@ The default GitHub Pages release is still `demo/mock`. It contains only fictiona
 ## Supported operating model
 
 - Kilcoy and Burpengary are provisioned as clinic entities.
-- Group finance is the safe default for newly imported accounts, including the BOQ Specialist loan.
-- An owner/admin assigns every imported account to Kilcoy, Burpengary or Group finance. Provider refreshes preserve that assignment.
+- Each business entity has an independent private Basiq user and bank-consent profile.
+- Every imported connection and account inherits the legal entity that initiated consent. Database constraints prevent cross-entity reassignment.
+- The BOQ Specialist loan is connected from its confirmed legal borrower's profile. Group finance is available only when that entity is the borrower.
 - Allowed institutions are server-configured. The initial production list is NAB (`AU01001`) and BOQ Specialist (`AU20130`); more institution IDs can be added after coverage and pilot testing.
 - Supported account classes are transaction, operating, savings, credit card, loan, mortgage and term deposit. Loans and mortgages are liabilities and are excluded from available cash and opening cash forecasts.
 - `connect` adds an institution or newly available account, `manage` reviews/revokes sharing, and `extend`/`reauthorise` handle consent renewal.
 
-If the clinics are separate legal entities/ABNs, use separately approved business profiles/consents rather than treating them as locations of one legal entity. The current interface provisions one business profile per workspace; create separate production workspaces or extend the profile selector before onboarding two legal entities.
+Adding another account for an existing entity uses that entity's **Add bank or account** consent action and requires no schema or code change. A genuinely new legal entity needs a new entity record plus an approved server-side business profile before consent is enabled.
 
 ## Request and data flow
 
 1. The signed-in owner creates a live workspace. The database creates Kilcoy, Burpengary and Group finance without demo records.
-2. `bank-connect` validates the Auth session and owner/admin membership, creates a Basiq Business Consumer user server-side, and returns a short-lived consent URL.
+2. The user chooses Kilcoy, Burpengary or the confirmed loan borrower. `bank-connect` validates Auth, owner/admin membership and entity ownership, creates that entity's Basiq Business Consumer user server-side, and returns a short-lived consent URL.
 3. The user selects accounts on Basiq/bank-hosted consent screens. The app never asks for an internet-banking password.
 4. `bank-sync` enforces a 90-minute explicit provider-refresh interval, starts the asynchronous job when eligible, otherwise reads the latest provider cache, validates the full provider scope, normalises integer AUD cents, and calls one trusted ingestion transaction.
-5. The ingestion RPC upserts connections, accounts and transactions atomically. Provider facts update, while manual categories and clinic assignments remain unchanged.
+5. The ingestion RPC upserts connections, accounts and transactions atomically. Provider facts update, while manual categories remain unchanged and legal ownership stays fixed to the consent profile.
 6. `bank-sync-scheduled` performs cached daily imports without consuming repeated explicit refreshes. It is callable only with a separate high-entropy scheduler secret.
 7. Consent expiry/revocation purges imported connections, accounts and transactions. Full disconnection also deletes the private provider profile after provider revocation.
 
@@ -35,14 +36,14 @@ Live provider code is enabled only when all of the following are true:
 2. `ALLOW_MOCK_DATA=false`.
 3. `BASIQ_ENABLED=true`.
 4. `BASIQ_BUSINESS_ONBOARDING_APPROVED=true`.
-5. A server-only API key, validated business profile and allowed-institution list exist.
+5. A server-only API key, an entity-keyed map of validated business profiles and an allowed-institution list exist.
 6. The organisation is non-demo and the requesting user is an owner/admin.
 
 Mock ingestion uses the inverse environment gates and only demo organisations. A production organisation can never silently fall back to fictional data.
 
 ## Refresh semantics
 
-The product deliberately says “last successful sync,” not “real-time.” Basiq refreshes are asynchronous, Open Banking explicit refreshes are limited, and some institutions may have latency. The application triggers at most one explicit provider refresh every 90 minutes per workspace (at most 16 per day), reads the latest provider cache between those refreshes, and uses scheduled cached imports for ordinary updates. A provider failure does not commit a partial snapshot.
+The product deliberately says “last successful sync,” not “real-time.” Basiq refreshes are asynchronous, Open Banking explicit refreshes are limited, and some institutions may have latency. The application triggers at most one explicit provider refresh every 90 minutes per legal-entity profile (at most 16 per day per profile), reads the latest provider cache between those refreshes, and uses scheduled cached imports for ordinary updates. A provider failure does not commit a partial snapshot.
 
 ## Remaining activation gates
 

@@ -9,10 +9,10 @@ import {
   type DemoState,
 } from '../services/demo-storage';
 import {
-  assignAccountToEntity,
   createLiveOrganisation,
   listOrganisations,
   loadDataset,
+  saveCategories,
   saveCategory,
   seedDemo,
   syncBank,
@@ -107,13 +107,13 @@ export function useFinance() {
       window.clearInterval(updates);
     };
   }, [advanceDemo, loading, simulationPaused]);
-  async function run(action: () => Promise<void>) {
+  async function run<T>(action: () => Promise<T>): Promise<T | undefined> {
     if (actionRunning.current) return;
     actionRunning.current = true;
     setBusy(true);
     setError('');
     try {
-      await action();
+      return await action();
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Unable to complete this action');
     } finally {
@@ -139,13 +139,58 @@ export function useFinance() {
       } else setData(next);
     });
   }
-  async function sync() {
+  async function categoriseMany(transactionIds: string[], categoryId: string) {
+    return run(async () => {
+      const current = isMock ? demoState.current?.dataset : data;
+      const ids = [...new Set(transactionIds)];
+      if (
+        !current ||
+        !ids.length ||
+        ids.length > 1000 ||
+        !current.categories.some((category) => category.id === categoryId)
+      )
+        throw new Error('Select between 1 and 1,000 transactions and a category.');
+      const ownedIds = new Set(
+        current.transactions
+          .filter((transaction) => transaction.organisationId === current.organisation.id)
+          .map((transaction) => transaction.id),
+      );
+      if (ids.some((id) => !ownedIds.has(id)))
+        throw new Error(
+          'The selection no longer belongs to this workspace. Refresh and try again.',
+        );
+      const requestVersion = version.current;
+      const count = isMock ? ids.length : await saveCategories(ids, categoryId);
+      const selectedIds = new Set(ids);
+      const update = (dataset: FinanceDataset): FinanceDataset => ({
+        ...dataset,
+        transactions: dataset.transactions.map((transaction) =>
+          selectedIds.has(transaction.id)
+            ? { ...transaction, categoryId, categorySource: 'manual' as const }
+            : transaction,
+        ),
+      });
+      if (isMock && demoState.current) {
+        // Retain the sequence, pause setting, and latest simulated balances.
+        commitDemoState(
+          { ...demoState.current, dataset: update(demoState.current.dataset) },
+          `Category saved for ${count} transactions on this device.`,
+        );
+      } else if (requestVersion === version.current) {
+        setData((dataset) =>
+          dataset?.organisation.id === current.organisation.id ? update(dataset) : dataset,
+        );
+      }
+      return count;
+    });
+  }
+  async function sync(entityId?: string) {
     if (!data) return;
     await run(async () => {
       if (isMock) {
         advanceDemo(true);
       } else {
-        await syncBank(data.organisation.id);
+        await syncBank(data.organisation.id, entityId);
         await refresh();
       }
     });
@@ -161,21 +206,6 @@ export function useFinance() {
       const id = await createLiveOrganisation(name.trim());
       if (id === organisationId) await refresh();
       else setOrganisationId(id);
-    });
-  }
-  async function assignAccount(accountId: string, entityId: string) {
-    await run(async () => {
-      await assignAccountToEntity(accountId, entityId);
-      setData((previous) =>
-        previous
-          ? {
-              ...previous,
-              accounts: previous.accounts.map((account) =>
-                account.id === accountId ? { ...account, entityId } : account,
-              ),
-            }
-          : previous,
-      );
     });
   }
   function toggleSimulation() {
@@ -205,10 +235,10 @@ export function useFinance() {
     simulationMessage,
     refresh,
     categorise,
+    categoriseMany,
     sync,
     createDemo,
     createLive,
-    assignAccount,
     toggleSimulation,
     resetDemo,
   };

@@ -101,11 +101,13 @@ Use the existing Git repository and remote; do not create a second repository. T
 In the repository settings:
 
 1. Open **Pages** and choose **GitHub Actions** as the build and deployment source.
-2. Pushes to `main` always publish the `public-demo` environment. A manual workflow run can deliberately choose `public-demo`, `hosted-demo` or `production`.
-3. The public demo needs no Supabase variables. For a deliberate hosted mode, set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` to the hosted project's public values. Leave `PAGES_BASE_PATH` unset for the ordinary project address; set it to `/` for a root/custom domain.
+2. Leave the repository variable `PAGES_DEPLOY_ENV` unset, or set it to `public-demo`, while the current Pages URL remains the safe fictional demo. Pushes to `main` use that variable and fall back to `public-demo`. A manual workflow run can deliberately choose `public-demo`, `hosted-demo` or `production` without changing the push policy.
+3. The public demo needs no Supabase variables. Configure `HOSTED_DEMO_SUPABASE_URL` and `HOSTED_DEMO_SUPABASE_PUBLISHABLE_KEY` for the separate hosted demo, and `PRODUCTION_SUPABASE_URL` and `PRODUCTION_SUPABASE_PUBLISHABLE_KEY` for production. These are public project identifiers, not secrets. Leave `PAGES_BASE_PATH` unset for the ordinary project address; set it to `/` for a root/custom domain.
 4. Configure a ruleset or branch protection for `main`, requiring pull requests and both validation jobs where the repository plan supports it.
 5. Configure the `github-pages` environment to allow deployments only from `main`. Add required reviewers if your release process needs a separate approval gate.
 6. Push approved code to `main`, or run **Deploy GitHub Pages** manually on `main`.
+
+At production go-live, first complete the backend, Auth, consent and pilot gates. Then set `PAGES_DEPLOY_ENV=production` before the production workflow run. This makes later pushes to `main` rebuild production instead of silently replacing it with the public demo. To return the URL to training/demo mode, deliberately set `PAGES_DEPLOY_ENV=public-demo` and deploy again.
 
 The workflow itself never deploys a pull request or a manually selected non-main branch. Branch protection determines who can approve or push code; a workflow cannot substitute for repository governance.
 
@@ -128,19 +130,22 @@ The workflow follows the official [GitHub Pages custom workflow requirements](ht
 
 ## Public configuration and secrets
 
-| Setting                                                    | Location                         | Purpose                                                                |
-| ---------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------- |
-| `VITE_APP_ENV`                                             | Frontend build                   | `development`, `demo` or `production`                                  |
-| `VITE_DATA_MODE`                                           | Frontend build                   | `mock` for public demo, `supabase` for hosted modes                    |
-| `VITE_SUPABASE_URL`                                        | Frontend public variable         | Supabase project endpoint                                              |
-| `VITE_SUPABASE_PUBLISHABLE_KEY`                            | Frontend public variable         | Public/publishable or legacy anon key                                  |
-| `VITE_BASE_PATH`                                           | Frontend build                   | Asset path with leading and trailing `/`                               |
-| `deploy_env`                                               | Manual Pages workflow input      | `public-demo`, `hosted-demo` or `production`; pushes use `public-demo` |
-| `PAGES_BASE_PATH`                                          | GitHub repository variable       | Optional override for generated asset path                             |
-| `APP_ENV`, `ALLOW_MOCK_DATA`, `CORS_ALLOWED_ORIGINS`       | Edge Function environment        | Backend mode and accepted browser origins                              |
-| `BASIQ_ENABLED`, onboarding flag, allowed institutions     | Supabase Edge Function secrets   | Fail-closed provider activation                                        |
-| Basiq API key, business profile and scheduler secret       | Supabase Edge Function secrets   | Consent, provider access and daily scheduler authentication            |
-| Supabase service-role key and all provider/API credentials | Trusted backend environment only | Privileged server operations                                           |
+| Setting                                                            | Location                         | Purpose                                                                                           |
+| ------------------------------------------------------------------ | -------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `VITE_APP_ENV`                                                     | Frontend build                   | `development`, `demo` or `production`                                                             |
+| `VITE_DATA_MODE`                                                   | Frontend build                   | `mock` for public demo, `supabase` for hosted modes                                               |
+| `VITE_SUPABASE_URL`                                                | Frontend public variable         | Selected environment's Supabase endpoint                                                          |
+| `VITE_SUPABASE_PUBLISHABLE_KEY`                                    | Frontend public variable         | Selected environment's public/publishable or legacy anon key                                      |
+| `VITE_BASE_PATH`                                                   | Frontend build                   | Asset path with leading and trailing `/`                                                          |
+| `deploy_env`                                                       | Manual Pages workflow input      | One-run override: `public-demo`, `hosted-demo` or `production`                                    |
+| `PAGES_DEPLOY_ENV`                                                 | GitHub repository variable       | Push target; unset defaults safely to `public-demo`, set to `production` only at approved go-live |
+| `HOSTED_DEMO_SUPABASE_URL`, `HOSTED_DEMO_SUPABASE_PUBLISHABLE_KEY` | GitHub repository variables      | Public configuration used only by the hosted-demo build                                           |
+| `PRODUCTION_SUPABASE_URL`, `PRODUCTION_SUPABASE_PUBLISHABLE_KEY`   | GitHub repository variables      | Public configuration used only by the production build                                            |
+| `PAGES_BASE_PATH`                                                  | GitHub repository variable       | Optional override for generated asset path                                                        |
+| `APP_ENV`, `ALLOW_MOCK_DATA`, `CORS_ALLOWED_ORIGINS`               | Edge Function environment        | Backend mode and accepted browser origins                                                         |
+| `BASIQ_ENABLED`, onboarding flag, allowed institutions             | Supabase Edge Function secrets   | Fail-closed provider activation                                                                   |
+| Basiq API key, business profile and scheduler secret               | Supabase Edge Function secrets   | Consent, provider access and daily scheduler authentication                                       |
+| Supabase service-role key and all provider/API credentials         | Trusted backend environment only | Privileged server operations                                                                      |
 
 Every `VITE_*` value must be treated as public, even if entered in a GitHub “secret” field. Vite embeds frontend values in downloadable assets. CORS restricts browser origins; authentication, membership checks and RLS still enforce access.
 
@@ -153,7 +158,7 @@ The selected demo project is `clinic-finance-demo`, reference `gackqbplslckvdyij
 3. Configure Edge Function settings as shown below. Supabase provides the functions' built-in backend credentials; do not copy a service-role key into the frontend.
 4. Apply the explicit demo runtime SQL below to this demo project's database. Migrations default to production with mocks disabled, so frontend environment variables alone cannot enable mock ingestion.
 5. Deploy `bank-sync`, `transaction-processing`, `receipt-processing` and `economic-data-sync`. The latter three remain authenticated placeholders; deployment does not enable their future integrations.
-6. Set GitHub's public URL/key variables and manually run the Pages workflow with `deploy_env=hosted-demo`. The hosted-demo build requires an HTTPS Supabase endpoint and a public/publishable or legacy anon key.
+6. Set GitHub's `HOSTED_DEMO_SUPABASE_URL` and `HOSTED_DEMO_SUPABASE_PUBLISHABLE_KEY` repository variables, then manually run the Pages workflow with `deploy_env=hosted-demo`. The hosted-demo build requires an HTTPS Supabase endpoint and a public/publishable or legacy anon key. Do not change `PAGES_DEPLOY_ENV` unless pushes should also keep publishing this mode.
 7. Verify unauthenticated rejection, tenant isolation, sign-in, sign-out and direct hash-route reloads. Sign in as the approved owner, create a demo organisation and run mock synchronisation to provision fictitious accounts and transactions.
 
 Hosted demo Edge Function settings:
@@ -178,7 +183,9 @@ For a local preview of the hosted frontend, supply that project's public URL/key
 
 ### Production deployment
 
-Apply migrations to a separate production project without the local seed or demo runtime SQL. Configure `APP_ENV=production`, `ALLOW_MOCK_DATA=false`, an exact browser-origin allowlist, Auth and approved users. Deploy `bank-connect`, `bank-sync` and `bank-sync-scheduled`, then set GitHub's public URL/key variables and manually run the Pages workflow with `deploy_env=production`.
+The dedicated project is `clinic-finance-production` (`hwmljlkrqbidjnlhfako`) in Sydney. Apply migrations without the local seed or demo runtime SQL. Configure `APP_ENV=production`, `ALLOW_MOCK_DATA=false`, an exact browser-origin allowlist, Auth and approved users. Deploy `bank-connect`, `bank-sync` and `bank-sync-scheduled`, then set GitHub's `PRODUCTION_SUPABASE_URL` and `PRODUCTION_SUPABASE_PUBLISHABLE_KEY` repository variables. Keep `PAGES_DEPLOY_ENV=public-demo` until go-live; after every production gate passes, set it to `production` and run the Pages workflow with `deploy_env=production`.
+
+Live banking uses `BASIQ_BUSINESS_PROFILES`, a protected JSON object keyed by the live workspace's entity UUIDs. Kilcoy and Burpengary require separate entries. The BOQ Specialist loan must be connected under its confirmed legal borrower. Keep the provider activation flags false until Basiq itself has approved the production application and issued the server key.
 
 Both hosted-demo and production builds fail closed when required public project configuration is missing or mock mode is requested. Neither uses the browser mock dataset at runtime or provides an unauthenticated fallback. Live consent remains disabled until the server-only Basiq gates are satisfied. Follow the [production banking runbook](basiq-production-onboarding.md) for secrets, scheduling, bank prerequisites and the mandatory three-account pilot.
 

@@ -1,4 +1,5 @@
 import { Basiq, cents, classifyTransaction, stableId, transactionAmount } from './basiq.ts';
+import { disconnectBankingProfile } from './banking-profile.ts';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -142,7 +143,7 @@ Deno.test('snapshot accepts a BOQ Specialist loan without treating it as cash', 
       apiKey: 'synthetic-key',
       allowedInstitutionIds: ['AU01001', 'AU20130'],
       automaticSync: true,
-      businessProfile: {},
+      businessProfiles: {},
     },
     fetcher,
     () => Date.parse('2026-10-06T00:00:00Z'),
@@ -189,7 +190,7 @@ Deno.test('manual refresh uses the refresh-all endpoint and job steps', async ()
       apiKey: 'synthetic-key',
       allowedInstitutionIds: ['AU01001'],
       automaticSync: false,
-      businessProfile: {},
+      businessProfiles: {},
     },
     fetcher,
   );
@@ -202,4 +203,119 @@ Deno.test('manual refresh uses the refresh-all endpoint and job steps', async ()
     calls.some((url) => url.endsWith('/jobs/refresh-job')),
     'refresh job was not checked',
   );
+});
+
+Deno.test('provider 404s are idempotent and a retry still purges the local profile', async () => {
+  const calls: string[] = [];
+  const fetcher: typeof fetch = async (input, init) => {
+    const url = String(input);
+    const method = init?.method ?? 'GET';
+    calls.push(`${method} ${url}`);
+    if (url.endsWith('/token'))
+      return json({ access_token: 'synthetic-token', token_type: 'Bearer', expires_in: 3600 });
+    if (method === 'GET' && url.endsWith('/consents'))
+      return json({
+        data: [{ id: 'consent-one', status: 'active' }],
+        links: { next: null },
+      });
+    if (method === 'GET' && url.endsWith('/connections'))
+      return json({
+        data: [{ id: 'connection-one', status: 'invalid' }],
+        links: { next: null },
+      });
+    if (method === 'DELETE') return json({ type: 'error' }, 404);
+    return json({}, 500);
+  };
+  const client = new Basiq(
+    {
+      apiKey: 'synthetic-key',
+      allowedInstitutionIds: ['AU01001'],
+      automaticSync: false,
+      businessProfiles: {},
+    },
+    fetcher,
+  );
+  const purges: unknown[] = [];
+
+  await disconnectBankingProfile(
+    'business-user',
+    'profile-one',
+    'actor-one',
+    (providerUserId) => client.disconnect(providerUserId),
+    (args) => {
+      purges.push(args);
+      return Promise.resolve({ error: null });
+    },
+  );
+
+  assert(
+    calls.some(
+      (call) => call === 'DELETE https://au-api.basiq.io/users/business-user/consents/consent-one',
+    ),
+    'missing consent was not treated as an idempotent delete',
+  );
+  assert(
+    calls.some(
+      (call) =>
+        call === 'DELETE https://au-api.basiq.io/users/business-user/connections/connection-one',
+    ),
+    'missing connection was not treated as an idempotent delete',
+  );
+  assert(
+    calls.some((call) => call === 'DELETE https://au-api.basiq.io/users/business-user'),
+    'missing provider user was not treated as an idempotent delete',
+  );
+  assert(purges.length === 1, 'local profile was not purged after provider 404s');
+  assert(
+    JSON.stringify(purges[0]) ===
+      JSON.stringify({
+        profile_id: 'profile-one',
+        actor_user_id: 'actor-one',
+        remove_profile: true,
+      }),
+    'local purge did not target the disconnected profile',
+  );
+});
+
+Deno.test('disconnect fails closed on provider errors other than not-found', async () => {
+  const fetcher: typeof fetch = async (input, init) => {
+    const url = String(input);
+    if (url.endsWith('/token'))
+      return json({ access_token: 'synthetic-token', token_type: 'Bearer', expires_in: 3600 });
+    if ((init?.method ?? 'GET') === 'GET' && url.endsWith('/consents'))
+      return json({
+        data: [{ id: 'consent-one', status: 'active' }],
+        links: { next: null },
+      });
+    return json({ type: 'error' }, 503);
+  };
+  const client = new Basiq(
+    {
+      apiKey: 'synthetic-key',
+      allowedInstitutionIds: ['AU01001'],
+      automaticSync: false,
+      businessProfiles: {},
+    },
+    fetcher,
+  );
+  let purged = false;
+  let rejected = false;
+
+  try {
+    await disconnectBankingProfile(
+      'business-user',
+      'profile-one',
+      'actor-one',
+      (providerUserId) => client.disconnect(providerUserId),
+      () => {
+        purged = true;
+        return Promise.resolve({ error: null });
+      },
+    );
+  } catch {
+    rejected = true;
+  }
+
+  assert(rejected, 'provider failure did not stop disconnect');
+  assert(!purged, 'local data was purged before provider revocation succeeded');
 });

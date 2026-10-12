@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Building2, CircleHelp, ExternalLink, Plus, RefreshCw, ShieldCheck } from 'lucide-react';
 import type { BankingStatus } from '../types/domain';
+import { bankingConnectionAttention } from '../domain/banking';
 import {
   bankingConsentUrl,
   disconnectBank,
@@ -32,12 +33,18 @@ function renewalDue(value: string | null) {
 
 export function BankingConnections({
   organisationId,
+  entityId,
+  entityName,
+  entityKind,
   workspaceBusy,
   enabled,
   onRefresh,
   onDisconnected,
 }: {
   organisationId: string;
+  entityId: string;
+  entityName: string;
+  entityKind: 'clinic' | 'group';
   workspaceBusy: boolean;
   enabled: boolean;
   onRefresh: () => Promise<void>;
@@ -51,6 +58,7 @@ export function BankingConnections({
   const requestVersion = useRef(0);
   const actionRunning = useRef(false);
   const dialog = useRef<HTMLDialogElement>(null);
+  const disconnectTitleId = useId();
 
   const refreshStatus = useCallback(async () => {
     if (!enabled) return;
@@ -58,7 +66,7 @@ export function BankingConnections({
     setChecking(true);
     setError('');
     try {
-      const result = await loadBankingStatus(organisationId);
+      const result = await loadBankingStatus(organisationId, entityId);
       if (current === requestVersion.current) setStatus(result);
     } catch (caught) {
       if (current === requestVersion.current) {
@@ -68,7 +76,7 @@ export function BankingConnections({
     } finally {
       if (current === requestVersion.current) setChecking(false);
     }
-  }, [enabled, organisationId]);
+  }, [enabled, entityId, organisationId]);
 
   useEffect(() => {
     void refreshStatus();
@@ -98,7 +106,7 @@ export function BankingConnections({
     setBusy(true);
     setError('');
     try {
-      const url = await bankingConsentUrl(organisationId, action);
+      const url = await bankingConsentUrl(organisationId, entityId, action);
       // Never retain the short-lived consent token in this app's URL or browser storage.
       window.location.assign(url);
     } catch (caught) {
@@ -114,7 +122,7 @@ export function BankingConnections({
     setBusy(true);
     setError('');
     try {
-      await disconnectBank(organisationId);
+      await disconnectBank(organisationId, entityId);
       setConfirmDisconnect(false);
       await onDisconnected();
       await refreshStatus();
@@ -129,17 +137,26 @@ export function BankingConnections({
   const unavailable = !enabled || !status?.configured;
   const locked = busy || checking || workspaceBusy;
   const hasConnection = Boolean(status?.connections.length);
-  const needsReauthorisation = status?.connectionState === 'consent_required';
+  const { needsReauthorisation, hasError: hasConnectionError } = bankingConnectionAttention(status);
   const needsRenewal = renewalDue(status?.consentExpiresAt ?? null);
+  const statusLabel = needsReauthorisation
+    ? stateLabels.consent_required
+    : hasConnectionError
+      ? stateLabels.error
+      : status
+        ? stateLabels[status.connectionState]
+        : 'Connection unavailable';
 
   return (
     <section className="panel banking-panel">
       <div className="panel-heading">
         <div>
-          <h2>Connected banking</h2>
-          <p>NAB and BOQ Specialist · secured by Basiq Open Banking</p>
+          <h2>{entityName} banking</h2>
+          <p>Separate legal-entity consent · secured by Basiq Open Banking</p>
         </div>
-        {status?.connectionState === 'active' && <ShieldCheck size={20} />}
+        {status?.connectionState === 'active' && !needsReauthorisation && !hasConnectionError && (
+          <ShieldCheck size={20} />
+        )}
       </div>
       <div className="settings-body">
         <div className="banking-status-summary">
@@ -147,13 +164,7 @@ export function BankingConnections({
             <Building2 size={21} />
           </span>
           <div>
-            <strong>
-              {checking
-                ? 'Checking connections…'
-                : status
-                  ? stateLabels[status.connectionState]
-                  : 'Connection unavailable'}
-            </strong>
+            <strong>{checking ? 'Checking connections…' : statusLabel}</strong>
             <span>Balances show the last successful provider sync, not a live payment feed.</span>
           </div>
         </div>
@@ -181,6 +192,11 @@ export function BankingConnections({
                 'Basiq production onboarding and server configuration must be completed before bank consent can start.'}
           </p>
         )}
+        <p className="banking-ownership-note">
+          {entityKind === 'group'
+            ? 'Connect the BOQ Specialist loan here only if this entity is the legal borrower.'
+            : `Select only bank accounts legally owned by ${entityName}.`}
+        </p>
         {status && (
           <dl className="banking-details">
             <div>
@@ -260,7 +276,7 @@ export function BankingConnections({
               disabled={locked}
               onClick={() => setConfirmDisconnect(true)}
             >
-              Disconnect all and remove imported data
+              Disconnect {entityName} and remove its imported data
             </button>
           )}
         </div>
@@ -277,7 +293,7 @@ export function BankingConnections({
       <dialog
         ref={dialog}
         className="banking-dialog"
-        aria-labelledby="disconnect-title"
+        aria-labelledby={disconnectTitleId}
         onCancel={(event) => {
           if (busy) event.preventDefault();
           else setConfirmDisconnect(false);
@@ -286,10 +302,10 @@ export function BankingConnections({
           if (!busy) setConfirmDisconnect(false);
         }}
       >
-        <h2 id="disconnect-title">Disconnect every bank?</h2>
+        <h2 id={disconnectTitleId}>Disconnect {entityName} banking?</h2>
         <p>
-          This revokes access and permanently removes imported accounts and transactions from this
-          workspace, including their manual category assignments.
+          This revokes this entity's access and permanently removes its imported accounts and
+          transactions, including their manual category assignments. Other entities are unaffected.
         </p>
         {error && (
           <p role="alert" className="banking-error">
@@ -310,7 +326,7 @@ export function BankingConnections({
             disabled={busy || workspaceBusy}
             onClick={() => void disconnect()}
           >
-            {busy ? 'Removing bank data…' : 'Disconnect and remove data'}
+            {busy ? 'Removing bank data…' : `Disconnect ${entityName}`}
           </button>
         </div>
       </dialog>

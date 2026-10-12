@@ -18,12 +18,14 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleHelp,
+  CalendarDays,
   CreditCard,
   Download,
   LayoutDashboard,
   LogOut,
   Menu,
   Pause,
+  PiggyBank,
   Play,
   RefreshCw,
   RotateCcw,
@@ -32,6 +34,7 @@ import {
   ShieldCheck,
   Sparkles,
   SlidersHorizontal,
+  Target,
   Wallet,
   X,
 } from 'lucide-react';
@@ -51,6 +54,8 @@ import { isMock, isProduction, supabase } from './services/supabase';
 import { csvCell } from './utils/csv';
 import { CashflowForecast } from './components/CashflowForecast';
 import { BankingConnections } from './components/BankingConnections';
+import { MoneyPlanning } from './components/MoneyPlanning';
+import { OverviewPortfolio } from './components/OverviewPortfolio';
 
 type FinanceState = ReturnType<typeof useFinance>;
 const isoToday = () =>
@@ -78,11 +83,19 @@ export function App() {
       ? 'Accounts'
       : location.pathname.startsWith('/forecast')
         ? 'Forecast'
-        : location.pathname.startsWith('/analytics')
-          ? 'Analytics'
-          : location.pathname.startsWith('/settings')
-            ? 'Workspace'
-            : 'Overview';
+        : location.pathname.startsWith('/budgets')
+          ? 'Budgets'
+          : location.pathname.startsWith('/bills')
+            ? 'Bills'
+            : location.pathname.startsWith('/goals')
+              ? 'Goals'
+              : location.pathname.startsWith('/insights')
+                ? 'Insights'
+                : location.pathname.startsWith('/analytics')
+                  ? 'Analytics'
+                  : location.pathname.startsWith('/settings')
+                    ? 'Workspace'
+                    : 'Overview';
   const demoAsOf = data?.transactions
     .map((transaction) => transaction.postedAt)
     .sort()
@@ -145,6 +158,22 @@ export function App() {
             <ChartNoAxesCombined size={19} />
             Analytics
           </NavLink>
+          <NavLink to="/budgets">
+            <PiggyBank size={19} />
+            Budgets
+          </NavLink>
+          <NavLink to="/bills">
+            <CalendarDays size={19} />
+            Bills
+          </NavLink>
+          <NavLink to="/goals">
+            <Target size={19} />
+            Goals
+          </NavLink>
+          <NavLink to="/insights">
+            <Sparkles size={19} />
+            Insights
+          </NavLink>
         </nav>
         <div className="sidebar-lower">
           <div className="workspace-note">
@@ -170,7 +199,7 @@ export function App() {
             <span>CF</span>
             <div>
               <strong>{isMock ? 'Demo workspace' : 'Signed in securely'}</strong>
-              <small>Version 0.3</small>
+              <small>Version 0.4</small>
             </div>
             {!isMock && (
               <button
@@ -221,7 +250,15 @@ export function App() {
                         ? 'See how recurring movements and recent spending may shape your cash position.'
                         : pageTitle === 'Analytics'
                           ? 'Understand the patterns behind your cash flow.'
-                          : 'Manage your organisation and data connections.'}
+                          : pageTitle === 'Budgets'
+                            ? 'Set spending limits and see how your practices are tracking.'
+                            : pageTitle === 'Bills'
+                              ? 'See recurring payments before they arrive.'
+                              : pageTitle === 'Goals'
+                                ? 'Build your reserves, one goal at a time.'
+                                : pageTitle === 'Insights'
+                                  ? 'Turn your financial activity into useful next steps.'
+                                  : 'Manage your organisation and data connections.'}
               </p>
             </div>
             {data && (
@@ -303,12 +340,23 @@ export function App() {
                   path="/transactions"
                   element={<Transactions data={data} scope={scope} finance={finance} />}
                 />
-                <Route
-                  path="/accounts"
-                  element={<Accounts data={data} scope={scope} finance={finance} />}
-                />
+                <Route path="/accounts" element={<Accounts data={data} scope={scope} />} />
                 <Route path="/forecast" element={<CashflowForecast data={data} scope={scope} />} />
                 <Route path="/analytics" element={<Analytics data={data} scope={scope} />} />
+                {(['budgets', 'bills', 'goals', 'insights'] as const).map((view) => (
+                  <Route
+                    key={view}
+                    path={`/${view}`}
+                    element={
+                      <MoneyPlanning
+                        key={`${data.organisation.id}:${view}`}
+                        view={view}
+                        data={data}
+                        scope={scope}
+                      />
+                    }
+                  />
+                ))}
                 <Route path="/settings" element={<Workspace finance={finance} />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
@@ -320,7 +368,7 @@ export function App() {
                   · All amounts in AUD
                 </span>
                 <span>
-                  Clinic Finance <span className="footer-version">0.3</span>
+                  Clinic Finance <span className="footer-version">0.4</span>
                 </span>
               </footer>
             </>
@@ -479,6 +527,7 @@ function Dashboard({
   );
   return (
     <>
+      <OverviewPortfolio data={data} scope={scope} />
       <div className="metric-grid">
         <Metric
           label="Available cash"
@@ -740,16 +789,46 @@ function TransactionTable({
   data,
   transactions,
   onSelect,
+  selectedIds,
+  onToggleSelection,
+  onSelectVisible,
 }: {
   data: FinanceDataset;
   transactions: Transaction[];
   onSelect?: (transaction: Transaction) => void;
+  selectedIds?: Set<string>;
+  onToggleSelection?: (transactionId: string) => void;
+  onSelectVisible?: (selected: boolean) => void;
 }) {
+  const selectedCount = transactions.filter((transaction) =>
+    selectedIds?.has(transaction.id),
+  ).length;
   return (
     <div className="table-scroll">
       <table className="transaction-table">
         <thead>
           <tr>
+            {onToggleSelection && (
+              <th className="selection-cell">
+                <input
+                  type="checkbox"
+                  aria-label="Select all visible transactions"
+                  aria-checked={
+                    selectedCount > 0 && selectedCount < transactions.length
+                      ? 'mixed'
+                      : selectedCount > 0
+                  }
+                  ref={(input) => {
+                    if (input)
+                      input.indeterminate =
+                        selectedCount > 0 && selectedCount < transactions.length;
+                  }}
+                  checked={transactions.length > 0 && selectedCount === transactions.length}
+                  disabled={!transactions.length}
+                  onChange={(event) => onSelectVisible?.(event.target.checked)}
+                />
+              </th>
+            )}
             <th>Transaction</th>
             <th>Account</th>
             <th>Category</th>
@@ -769,6 +848,16 @@ function TransactionTable({
             const category = data.categories.find((item) => item.id === transaction.categoryId);
             return (
               <tr key={transaction.id}>
+                {onToggleSelection && (
+                  <td data-label="Select" className="selection-cell">
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${transaction.description}`}
+                      checked={selectedIds?.has(transaction.id) || false}
+                      onChange={() => onToggleSelection(transaction.id)}
+                    />
+                  </td>
+                )}
                 <td data-label="Transaction">
                   <div className="transaction-name">
                     <span
@@ -866,8 +955,26 @@ function Transactions({
   };
   const [page, setPage] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [categoryFilter, setCategoryFilter] = useState('all');
+  const requestedCategory = params.get('category') || 'all';
+  const categoryFilter = data.categories.some((category) => category.id === requestedCategory)
+    ? requestedCategory
+    : 'all';
+  const setCategoryFilter = (value: string) => {
+    const next = new URLSearchParams(params);
+    if (value === 'all') next.delete('category');
+    else next.set('category', value);
+    setParams(next);
+  };
   const [statusFilter, setStatusFilter] = useState('all');
+  const [amountMin, setAmountMin] = useState('');
+  const [amountMax, setAmountMax] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkCategoryId, setBulkCategoryId] = useState('');
+  const [bulkMessage, setBulkMessage] = useState('');
+  const [bulkError, setBulkError] = useState('');
+  const minCents = amountMin === '' ? null : Math.round(Number(amountMin) * 100);
+  const maxCents = amountMax === '' ? null : Math.round(Number(amountMax) * 100);
+  const amountRangeInvalid = minCents !== null && maxCents !== null && minCents > maxCents;
   const review = params.get('review') || 'all';
   const selected = data.transactions.find((transaction) => transaction.id === selectedId);
   const transactions = filterTransactions(data, { ...scope, accountId })
@@ -879,12 +986,43 @@ function Transactions({
           (review === 'transfers' && transaction.transferPairId)) &&
         (categoryFilter === 'all' || transaction.categoryId === categoryFilter) &&
         (statusFilter === 'all' || transaction.status === statusFilter) &&
+        !amountRangeInvalid &&
+        (minCents === null || Math.abs(transaction.amountCents) >= minCents) &&
+        (maxCents === null || Math.abs(transaction.amountCents) <= maxCents) &&
         `${transaction.description} ${transaction.merchant || ''}`
           .toLowerCase()
           .includes(search.toLowerCase()),
     )
     .sort((a, b) => b.postedAt.localeCompare(a.postedAt) || a.id.localeCompare(b.id));
   const currentPage = Math.min(page, Math.max(0, Math.ceil(transactions.length / 15) - 1));
+  const visibleTransactions = transactions.slice(currentPage * 15, currentPage * 15 + 15);
+  const visibleIds = new Set(visibleTransactions.map((transaction) => transaction.id));
+  const visibleSelectedIds = new Set(selectedIds.filter((id) => visibleIds.has(id)));
+  const selectedTransactions = visibleTransactions.filter((transaction) =>
+    visibleSelectedIds.has(transaction.id),
+  );
+  const bulkCategories = data.categories.filter(
+    (category) =>
+      category.kind !== 'transfer' ||
+      (selectedTransactions.length > 0 &&
+        selectedTransactions.every((transaction) => transaction.transferPairId)),
+  );
+  function resetSelection() {
+    setSelectedIds([]);
+    setBulkError('');
+    setBulkMessage('');
+  }
+  async function saveSelectedCategory() {
+    setBulkMessage('');
+    setBulkError('');
+    const count = await finance.categoriseMany([...visibleSelectedIds], bulkCategoryId);
+    if (count === undefined) {
+      setBulkError('Categories could not be saved. Your selection is still available to retry.');
+      return;
+    }
+    setSelectedIds([]);
+    setBulkMessage(`Category saved for ${count} ${count === 1 ? 'transaction' : 'transactions'}.`);
+  }
   function exportCsv() {
     const safe = csvCell;
     const csv = [
@@ -904,7 +1042,11 @@ function Transactions({
                 'Uncategorised',
             ),
             (transaction.amountCents / 100).toFixed(2),
-            transaction.amountCents >= 0 ? 'Income' : 'Expense',
+            transaction.transferPairId
+              ? 'Transfer'
+              : transaction.amountCents >= 0
+                ? 'Income'
+                : 'Expense',
             transaction.status,
           ].join(',');
         })(),
@@ -933,6 +1075,7 @@ function Transactions({
               onChange={(event) => {
                 setSearch(event.target.value);
                 setPage(0);
+                resetSelection();
               }}
             />
           </label>
@@ -943,6 +1086,7 @@ function Transactions({
               onChange={(event) => {
                 setAccountId(event.target.value);
                 setPage(0);
+                resetSelection();
               }}
             >
               <option value="all">All accounts</option>
@@ -961,6 +1105,7 @@ function Transactions({
               onChange={(event) => {
                 setCategoryFilter(event.target.value);
                 setPage(0);
+                resetSelection();
               }}
             >
               <option value="all">All categories</option>
@@ -978,6 +1123,7 @@ function Transactions({
               onChange={(event) => {
                 setStatusFilter(event.target.value);
                 setPage(0);
+                resetSelection();
               }}
             >
               <option value="all">Any status</option>
@@ -995,6 +1141,7 @@ function Transactions({
                 else next.set('review', event.target.value);
                 setParams(next);
                 setPage(0);
+                resetSelection();
               }}
             >
               <option value="all">All transactions</option>
@@ -1003,15 +1150,136 @@ function Transactions({
               <option value="transfers">Internal transfers</option>
             </select>
           </label>
+          <label className="amount-filter">
+            <span>Min amount (AUD)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              aria-label="Minimum amount (AUD)"
+              placeholder="0.00"
+              value={amountMin}
+              onChange={(event) => {
+                setAmountMin(event.target.value);
+                setPage(0);
+                resetSelection();
+              }}
+            />
+          </label>
+          <label className="amount-filter">
+            <span>Max amount (AUD)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              aria-label="Maximum amount (AUD)"
+              placeholder="Any amount"
+              value={amountMax}
+              onChange={(event) => {
+                setAmountMax(event.target.value);
+                setPage(0);
+                resetSelection();
+              }}
+            />
+          </label>
+          <button
+            className="text-button"
+            onClick={() => {
+              setSearch('');
+              setStatusFilter('all');
+              setAmountMin('');
+              setAmountMax('');
+              const next = new URLSearchParams(params);
+              next.delete('account');
+              next.delete('review');
+              next.delete('category');
+              setParams(next);
+              setPage(0);
+              resetSelection();
+            }}
+          >
+            Clear filters
+          </button>
           <button className="button secondary" onClick={exportCsv}>
             <Download size={15} />
             Export
           </button>
         </div>
+        <div className="bulk-category-toolbar">
+          <span>{visibleSelectedIds.size} selected on this page</span>
+          <label>
+            <span className="sr-only">Category for selected transactions</span>
+            <select
+              aria-label="Category for selected transactions"
+              value={bulkCategoryId}
+              onChange={(event) => setBulkCategoryId(event.target.value)}
+              disabled={!visibleSelectedIds.size || finance.busy}
+            >
+              <option value="">Choose category</option>
+              {bulkCategories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="button secondary"
+            disabled={
+              !visibleSelectedIds.size ||
+              !bulkCategories.some((category) => category.id === bulkCategoryId) ||
+              finance.busy
+            }
+            onClick={() => void saveSelectedCategory()}
+          >
+            Save selected categories
+          </button>
+          <button
+            className="text-button"
+            disabled={!selectedIds.length || finance.busy}
+            onClick={resetSelection}
+          >
+            Clear selection
+          </button>
+          <small className="muted">
+            Amount filters use absolute values, for both money in and out.
+          </small>
+        </div>
+        {amountRangeInvalid && (
+          <p role="alert" className="transaction-feedback">
+            Minimum amount must not exceed maximum amount.
+          </p>
+        )}
+        {bulkMessage && (
+          <p role="status" className="transaction-feedback saved-message">
+            {bulkMessage}
+          </p>
+        )}
+        {bulkError && (
+          <p role="alert" className="transaction-feedback">
+            {bulkError}
+          </p>
+        )}
         <TransactionTable
           data={data}
-          transactions={transactions.slice(currentPage * 15, currentPage * 15 + 15)}
+          transactions={visibleTransactions}
           onSelect={(transaction) => setSelectedId(transaction.id)}
+          selectedIds={visibleSelectedIds}
+          onToggleSelection={(id) => {
+            setBulkMessage('');
+            setBulkError('');
+            setSelectedIds((current) => {
+              const selected = current.filter((candidate) => visibleIds.has(candidate));
+              return selected.includes(id)
+                ? selected.filter((candidate) => candidate !== id)
+                : [...selected, id];
+            });
+          }}
+          onSelectVisible={(checked) => {
+            setBulkMessage('');
+            setBulkError('');
+            setSelectedIds(checked ? [...visibleIds] : []);
+          }}
         />
         <div className="pagination">
           <span>
@@ -1025,7 +1293,10 @@ function Transactions({
               className="icon-button"
               disabled={currentPage === 0}
               aria-label="Previous page"
-              onClick={() => setPage(currentPage - 1)}
+              onClick={() => {
+                setPage(currentPage - 1);
+                resetSelection();
+              }}
             >
               <ChevronLeft size={18} />
             </button>
@@ -1034,7 +1305,10 @@ function Transactions({
               className="icon-button"
               disabled={(currentPage + 1) * 15 >= transactions.length}
               aria-label="Next page"
-              onClick={() => setPage(currentPage + 1)}
+              onClick={() => {
+                setPage(currentPage + 1);
+                resetSelection();
+              }}
             >
               <ChevronRight size={18} />
             </button>
@@ -1066,6 +1340,9 @@ function TransactionDetail({
   close: () => void;
 }) {
   const [categoryId, setCategoryId] = useState(transaction.categoryId || '');
+  const [applyMatching, setApplyMatching] = useState(false);
+  const [savedCount, setSavedCount] = useState<number | null>(null);
+  const [saveError, setSaveError] = useState('');
   const dialogRef = useRef<HTMLElement>(null);
   useEffect(() => {
     const trigger = document.activeElement as HTMLElement | null;
@@ -1073,6 +1350,28 @@ function TransactionDetail({
     return () => trigger?.focus();
   }, []);
   const account = data.accounts.find((item) => item.id === transaction.accountId);
+  const normalise = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
+  const merchant = normalise(transaction.merchant || '');
+  const matching = data.transactions.filter(
+    (candidate) =>
+      transaction.status === 'posted' &&
+      candidate.organisationId === data.organisation.id &&
+      candidate.status === 'posted' &&
+      Math.sign(candidate.amountCents) === Math.sign(transaction.amountCents) &&
+      (merchant
+        ? normalise(candidate.merchant || '') === merchant
+        : normalise(candidate.description) === normalise(transaction.description)),
+  );
+  const categoryAllowed = data.categories.some(
+    (category) =>
+      category.id === categoryId &&
+      (category.kind !== 'transfer' ||
+        (transaction.transferPairId &&
+          (!applyMatching || matching.every((candidate) => candidate.transferPairId)))),
+  );
+  const changeNeeded = applyMatching
+    ? matching.some((candidate) => candidate.categoryId !== categoryId)
+    : categoryId !== transaction.categoryId;
   return (
     <div
       className="modal-backdrop"
@@ -1152,12 +1451,24 @@ function TransactionDetail({
         </dl>
         <label>
           Category
-          <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
+          <select
+            value={categoryId}
+            onChange={(event) => {
+              setCategoryId(event.target.value);
+              setSavedCount(null);
+              setSaveError('');
+            }}
+          >
             <option value="" disabled>
               Choose a category
             </option>
             {data.categories
-              .filter((category) => category.kind !== 'transfer' || transaction.transferPairId)
+              .filter(
+                (category) =>
+                  category.kind !== 'transfer' ||
+                  (transaction.transferPairId &&
+                    (!applyMatching || matching.every((candidate) => candidate.transferPairId))),
+              )
               .map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}
@@ -1165,6 +1476,29 @@ function TransactionDetail({
               ))}
           </select>
         </label>
+        {transaction.status === 'posted' && matching.length > 1 && (
+          <label className="matching-category-option">
+            <input
+              type="checkbox"
+              checked={applyMatching}
+              disabled={finance.busy || matching.length > 1000}
+              onChange={(event) => {
+                setApplyMatching(event.target.checked);
+                setSavedCount(null);
+                setSaveError('');
+              }}
+            />
+            <span>
+              Apply to all {matching.length} matching posted transactions in{' '}
+              {data.organisation.name}
+              <small>
+                Same {merchant ? 'merchant' : 'bank description'} and money direction. This changes
+                existing transactions in this workspace only.
+                {matching.length > 1000 && ' Narrow the selection to 1,000 transactions or fewer.'}
+              </small>
+            </span>
+          </label>
+        )}
         <p className="muted detail-hint">
           {isMock
             ? 'Category changes are saved only in this browser until you reset the demo.'
@@ -1172,17 +1506,35 @@ function TransactionDetail({
         </p>
         <button
           className="button primary"
-          disabled={!categoryId || finance.busy || categoryId === transaction.categoryId}
+          disabled={!categoryAllowed || finance.busy || !changeNeeded}
           onClick={async () => {
-            await finance.categorise(transaction.id, categoryId);
+            setSaveError('');
+            if (applyMatching) {
+              const count = await finance.categoriseMany(
+                matching.map((candidate) => candidate.id),
+                categoryId,
+              );
+              if (count === undefined)
+                setSaveError('Matching categories could not be saved. Please try again.');
+              else setSavedCount(count);
+            } else {
+              await finance.categorise(transaction.id, categoryId);
+            }
             dialogRef.current?.focus();
           }}
         >
           Save category
         </button>
-        {transaction.categorySource === 'manual' && (
+        {saveError && (
+          <p role="alert" className="detail-hint">
+            {saveError}
+          </p>
+        )}
+        {(savedCount !== null || transaction.categorySource === 'manual') && (
           <p role="status" className="saved-message">
-            Category saved.
+            {savedCount === null
+              ? 'Category saved.'
+              : `Category saved for ${savedCount} matching transactions.`}
           </p>
         )}
       </section>
@@ -1205,15 +1557,7 @@ function isLiabilityAccount(kind: FinanceDataset['accounts'][number]['kind']) {
   return kind === 'credit_card' || kind === 'loan' || kind === 'mortgage';
 }
 
-function Accounts({
-  data,
-  scope,
-  finance,
-}: {
-  data: FinanceDataset;
-  scope: FinanceScope;
-  finance: FinanceState;
-}) {
+function Accounts({ data, scope }: { data: FinanceDataset; scope: FinanceScope }) {
   const accounts = scopedAccounts(data, scope);
   const navigate = useNavigate();
   const entities = data.entities.filter((entity) =>
@@ -1298,24 +1642,9 @@ function Accounts({
                       )}
                   </div>
                   {!isMock && (
-                    <label className="account-assignment">
-                      Assign to
-                      <select
-                        value={account.entityId}
-                        disabled={finance.busy}
-                        onChange={(event) =>
-                          void finance.assignAccount(account.id, event.target.value)
-                        }
-                      >
-                        {data.entities
-                          .filter((candidate) => candidate.kind !== 'personal')
-                          .map((candidate) => (
-                            <option key={candidate.id} value={candidate.id}>
-                              {candidate.name}
-                            </option>
-                          ))}
-                      </select>
-                    </label>
+                    <p className="account-ownership-lock">
+                      Legal owner fixed by {entity.name}'s bank consent
+                    </p>
                   )}
                   <div className="account-card-footer">
                     <span>
@@ -1463,7 +1792,7 @@ function Workspace({ finance }: { finance: FinanceState }) {
         <section className="panel">
           <PanelHeading
             title="Banking connections"
-            subtitle="Fictional provider data · Version 0.3"
+            subtitle="Fictional provider data · Version 0.4"
           />
           <div className="settings-body">
             {data.connections.map((connection) => (
@@ -1490,13 +1819,24 @@ function Workspace({ finance }: { finance: FinanceState }) {
           </div>
         </section>
       ) : (
-        <BankingConnections
-          organisationId={data.organisation.id}
-          workspaceBusy={finance.busy}
-          enabled={!isMock}
-          onRefresh={async () => finance.sync()}
-          onDisconnected={finance.refresh}
-        />
+        data.entities
+          .filter(
+            (entity): entity is typeof entity & { kind: 'clinic' | 'group' } =>
+              entity.kind === 'clinic' || entity.kind === 'group',
+          )
+          .map((entity) => (
+            <BankingConnections
+              key={entity.id}
+              organisationId={data.organisation.id}
+              entityId={entity.id}
+              entityName={entity.name}
+              entityKind={entity.kind}
+              workspaceBusy={finance.busy}
+              enabled={!isMock}
+              onRefresh={async () => finance.sync(entity.id)}
+              onDisconnected={finance.refresh}
+            />
+          ))
       )}
     </div>
   );
