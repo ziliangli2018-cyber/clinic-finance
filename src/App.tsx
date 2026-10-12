@@ -56,6 +56,7 @@ import { CashflowForecast } from './components/CashflowForecast';
 import { BankingConnections } from './components/BankingConnections';
 import { MoneyPlanning } from './components/MoneyPlanning';
 import { OverviewPortfolio } from './components/OverviewPortfolio';
+import { pendingBankConsentReturn } from './services/bank-consent-return';
 
 type FinanceState = ReturnType<typeof useFinance>;
 const isoToday = () =>
@@ -77,6 +78,14 @@ export function App() {
   const [days, setDays] = useState(30);
   const [menu, setMenu] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const liveOrganisationId = data?.organisation.id;
+  useEffect(() => {
+    if (isMock || !liveOrganisationId) return;
+    const pending = pendingBankConsentReturn();
+    if (pending?.organisationId === liveOrganisationId && location.pathname !== '/settings')
+      navigate('/settings', { replace: true });
+  }, [liveOrganisationId, location.pathname, navigate]);
   const pageTitle = location.pathname.startsWith('/transactions')
     ? 'Transactions'
     : location.pathname.startsWith('/accounts')
@@ -1648,9 +1657,12 @@ function Accounts({ data, scope }: { data: FinanceDataset; scope: FinanceScope }
                   )}
                   <div className="account-card-footer">
                     <span>
-                      {new Date(account.updatedAt).toLocaleDateString('en-AU', {
+                      {new Date(account.updatedAt).toLocaleString('en-AU', {
                         day: 'numeric',
                         month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        timeZone: 'Australia/Brisbane',
                       })}
                     </span>
                     <button
@@ -1833,8 +1845,10 @@ function Workspace({ finance }: { finance: FinanceState }) {
               entityKind={entity.kind}
               workspaceBusy={finance.busy}
               enabled={!isMock}
-              onRefresh={async () => finance.sync(entity.id)}
-              onDisconnected={finance.refresh}
+              onRefresh={async () => Boolean(await finance.sync(entity.id))}
+              onDisconnected={async () => {
+                await finance.refresh({ background: true });
+              }}
             />
           ))
       )}
