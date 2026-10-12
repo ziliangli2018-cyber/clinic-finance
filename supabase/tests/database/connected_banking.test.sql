@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(23);
+select plan(29);
 
 insert into auth.users(id, email)
 values ('11000000-0000-4000-8000-000000000001', 'clinic-owner@example.invalid');
@@ -25,11 +25,57 @@ select is(
 );
 
 reset role;
-insert into private.banking_profiles(id, organisation_id, provider_user_id)
-select '12000000-0000-4000-8000-000000000001', id, 'provider-user-one'
-from public.organisations where name = 'Kilcoy & Burpengary Dental Group';
+insert into private.banking_profiles(id, organisation_id, entity_id, provider_user_id)
+select
+  '12000000-0000-4000-8000-000000000001',
+  o.id,
+  e.id,
+  'provider-user-one'
+from public.organisations o
+join public.entities e on e.organisation_id = o.id and e.name = 'Group finance'
+where o.name = 'Kilcoy & Burpengary Dental Group';
 
 set local role service_role;
+select lives_ok($sql$
+  select public.save_basiq_profile(
+    (select id from public.organisations),
+    (select id from public.entities where name = 'Kilcoy'),
+    '11000000-0000-4000-8000-000000000001',
+    'provider-user-two'
+  )
+$sql$, 'A second legal entity can have an independent provider profile');
+select is(
+  (select count(*) from private.banking_profiles),
+  2::bigint,
+  'The workspace can retain separate entity banking profiles'
+);
+select throws_ok($sql$
+  select public.save_basiq_profile(
+    (select id from public.organisations),
+    (select id from public.entities where name = 'Kilcoy'),
+    '11000000-0000-4000-8000-000000000001',
+    'provider-user-three'
+  )
+$sql$, '23505', null, 'A concurrent provider user cannot replace an entity profile');
+select is(
+  (select provider_user_id from private.banking_profiles where entity_id =
+    (select id from public.entities where name = 'Kilcoy')),
+  'provider-user-two',
+  'The original provider identity survives a conflicting save'
+);
+select lives_ok($sql$
+  select public.purge_basiq_data(
+    (select id from private.banking_profiles where provider_user_id = 'provider-user-two'),
+    '11000000-0000-4000-8000-000000000001',
+    true
+  )
+$sql$, 'Disconnecting one entity removes only that provider profile');
+select is(
+  (select count(*) from private.banking_profiles),
+  1::bigint,
+  'The other legal entity profile remains after an isolated disconnect'
+);
+
 select lives_ok($sql$
   select public.ingest_basiq_snapshot(
     '12000000-0000-4000-8000-000000000001',
@@ -55,17 +101,25 @@ select is(
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"11000000-0000-4000-8000-000000000001","role":"authenticated"}';
-select lives_ok(
-  $$select public.set_account_entity(
-    '14000000-0000-4000-8000-000000000001',
-    (select id from public.entities where name = 'Kilcoy')
-  )$$,
-  'Owner can assign an account to Kilcoy'
-);
 select throws_ok(
-  $$select public.set_account_entity('14000000-0000-4000-8000-000000000001','99999999-0000-4000-8000-000000000999')$$,
-  '22023', null, 'Unknown or foreign entities are rejected'
+  $$update public.accounts
+    set entity_id = (select id from public.entities where name = 'Kilcoy')
+    where id = '14000000-0000-4000-8000-000000000001'$$,
+  '42501', null, 'Browser roles cannot reassign imported account ownership'
 );
+
+reset role;
+set local role service_role;
+select throws_ok(
+  $$update public.accounts
+    set entity_id = (select id from public.entities where name = 'Kilcoy')
+    where id = '14000000-0000-4000-8000-000000000001'$$,
+  '23503', null, 'The composite foreign key rejects cross-entity account ownership'
+);
+
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"11000000-0000-4000-8000-000000000001","role":"authenticated"}';
 select lives_ok(
   $$select public.set_transaction_category(
     '15000000-0000-4000-8000-000000000001',
@@ -90,8 +144,8 @@ $sql$, 'A repeated snapshot updates provider facts atomically');
 select is(
   (select e.name from public.accounts a join public.entities e on e.id = a.entity_id
     where a.id = '14000000-0000-4000-8000-000000000001'),
-  'Kilcoy',
-  'Refresh preserves the manual clinic assignment'
+  'Group finance',
+  'Refresh preserves the profile legal entity'
 );
 select is(
   (select category_source || ':' || category_id from public.transactions

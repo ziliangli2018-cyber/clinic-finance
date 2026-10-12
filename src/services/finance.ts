@@ -89,10 +89,10 @@ export function validateConsentUrl(value: unknown): string {
 export type BankingAction =
   'status' | 'connect' | 'manage' | 'extend' | 'reauthorise' | 'disconnect';
 
-async function bankingAction(organisationId: string, action: BankingAction) {
+async function bankingAction(organisationId: string, entityId: string, action: BankingAction) {
   if (!supabase) throw new Error('Supabase is not configured');
   const { data, error } = await supabase.functions.invoke('bank-connect', {
-    body: { organisationId, action },
+    body: { organisationId, entityId, action },
   });
   if (error)
     throw new Error(
@@ -107,11 +107,15 @@ function validTimestamp(value: unknown): value is string | null {
   return value === null || (typeof value === 'string' && Number.isFinite(Date.parse(value)));
 }
 
-export async function loadBankingStatus(organisationId: string): Promise<BankingStatus> {
-  const data = await bankingAction(organisationId, 'status');
+export async function loadBankingStatus(
+  organisationId: string,
+  entityId: string,
+): Promise<BankingStatus> {
+  const data = await bankingAction(organisationId, entityId, 'status');
   const connectionStates = ['not_connected', 'pending', 'active', 'error', 'consent_required'];
   const rowStates = ['pending', 'active', 'error', 'consent_required'];
   if (
+    data.entityId !== entityId ||
     data.provider !== 'basiq' ||
     typeof data.configured !== 'boolean' ||
     typeof data.automaticSync !== 'boolean' ||
@@ -138,30 +142,25 @@ export async function loadBankingStatus(organisationId: string): Promise<Banking
 
 export async function bankingConsentUrl(
   organisationId: string,
+  entityId: string,
   action: Exclude<BankingAction, 'status' | 'disconnect'>,
 ) {
-  const data = await bankingAction(organisationId, action);
+  const data = await bankingAction(organisationId, entityId, action);
+  if (data.entityId !== entityId) throw new Error('The bank consent link is unavailable.');
   return validateConsentUrl(data.url);
 }
 
-export async function disconnectBank(organisationId: string) {
-  const data = await bankingAction(organisationId, 'disconnect');
-  if (data.disconnected !== true)
+export async function disconnectBank(organisationId: string, entityId: string) {
+  const data = await bankingAction(organisationId, entityId, 'disconnect');
+  if (data.entityId !== entityId || data.disconnected !== true)
     throw new Error('The bank connections could not be disconnected.');
 }
 
-export async function assignAccountToEntity(accountId: string, entityId: string) {
+export async function syncBank(organisationId: string, entityId?: string) {
   if (!supabase) throw new Error('Supabase is not configured');
-  const { error } = await supabase.rpc('set_account_entity', {
-    account_id: accountId,
-    entity_id: entityId,
+  const { error } = await supabase.functions.invoke('bank-sync', {
+    body: { organisationId, ...(entityId ? { entityId } : {}) },
   });
-  if (error) throw new Error('The account assignment could not be saved.');
-}
-
-export async function syncBank(organisationId: string) {
-  if (!supabase) throw new Error('Supabase is not configured');
-  const { error } = await supabase.functions.invoke('bank-sync', { body: { organisationId } });
   if (error)
     throw new Error(
       'Bank refresh failed. Check the connection in Workspace settings and try again.',
@@ -174,4 +173,23 @@ export async function saveCategory(transactionId: string, categoryId: string) {
     category_id: categoryId,
   });
   if (error) throw error;
+}
+
+/** Save a selection in one database transaction; never report a partial update as success. */
+export async function saveCategories(
+  transactionIds: string[],
+  categoryId: string,
+): Promise<number> {
+  if (!supabase) throw new Error('Supabase is not configured');
+  const ids = [...new Set(transactionIds)];
+  if (!ids.length || ids.length > 1000 || ids.some((id) => !id) || !categoryId)
+    throw new Error('Select between 1 and 1,000 transactions and a category.');
+  const { data, error } = await supabase.rpc('set_transaction_categories', {
+    transaction_ids: ids,
+    category_id: categoryId,
+  });
+  if (error) throw error;
+  if (!Number.isInteger(data) || data !== ids.length)
+    throw new Error('The category update could not be confirmed. Refresh before trying again.');
+  return data as number;
 }

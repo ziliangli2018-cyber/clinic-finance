@@ -1,6 +1,6 @@
 # Database and API contract
 
-Version 0.3 uses Supabase Auth, Postgres and Edge Functions. Apply migrations in filename order. Hosted migrations start with mock provisioning **disabled**. `supabase/seed.sql` enables mock mode only for the local development stack; do not apply that seed to production.
+Version 0.4 uses Supabase Auth, Postgres and Edge Functions. Apply migrations in filename order. Hosted migrations start with mock provisioning **disabled**. `supabase/seed.sql` enables mock mode only for the local development stack; do not apply that seed to production.
 
 ## Data model
 
@@ -10,6 +10,7 @@ Version 0.3 uses Supabase Auth, Postgres and Edge Functions. Apply migrations in
 | `entities`                              | Clinic, group-finance and optional personal entities within one tenant.                                                            |
 | `bank_connections`, `accounts`          | Normalised provider connections and account snapshots.                                                                             |
 | `transactions`                          | Integer AUD cents, positive inflows and negative outflows, date-only posting date, category provenance and optional transfer pair. |
+| `finance_plans`                         | User-owned monthly budgets, savings targets and bill schedules; editor writes under tenant RLS.                                    |
 | `categories`                            | Global, authenticated-readable category catalogue. Browser writes prohibited.                                                      |
 | `audit_events`                          | Append-only from application RPCs; visible to tenant owners/admins.                                                                |
 | `processing_jobs`                       | Tenant-readable processing status foundation. Mock sync writes successful jobs atomically.                                         |
@@ -18,10 +19,10 @@ Version 0.3 uses Supabase Auth, Postgres and Edge Functions. Apply migrations in
 | `forecast_scenarios`                    | Tenant-scoped future assumptions foundation; no production forecasting service.                                                    |
 | `private.provider_records`              | Raw provider evidence, unavailable to browsers and the public REST schema.                                                         |
 | `private.runtime_config`                | Server-controlled deployment environment and mock enablement.                                                                      |
-| `private.banking_profiles`              | Organisation-to-Basiq-user mapping, hidden from browser roles.                                                                     |
+| `private.banking_profiles`              | Legal-entity-to-Basiq-user mapping, hidden from browser roles.                                                                     |
 | `private.provider_connections`          | Private provider/local connection identity mapping used for cleanup.                                                               |
 
-Every application table has RLS. Browser grants permit only SELECT; no broad financial INSERT/UPDATE/DELETE policies exist. Default privileges keep future tables, sequences and functions private until a migration explicitly grants them. Organisation-owned references include the organisation identifier in composite foreign keys. An account references both a same-tenant entity and same-tenant connection independently, allowing clinic assignment without rewriting provider connection ownership. Monetary values use bounded `bigint` integer cents.
+Every application table has RLS. Imported accounts and transactions permit browser SELECT only; category changes use narrow RPCs. The user-managed `finance_plans` table permits owner/admin create, update and delete under tenant RLS while viewers have read access. Its tenant-scoped account references become null if consent cleanup removes an account, so a savings target cannot block mandatory bank-data deletion. Plans never change bank balances or initiate payments. Default privileges keep future tables, sequences and functions private until a migration explicitly grants them. Organisation-owned references include the organisation identifier in composite foreign keys. An account references a same-tenant connection and must carry that connection's entity ID, so imported ownership cannot cross legal-entity consent boundaries. Monetary values use bounded `bigint` integer cents.
 
 Transaction uniqueness is `(organisation_id, account_id, provider_transaction_id)`. Tenant-scoped deterministic IDs prevent the same sample dataset colliding across organisations. Manual categories survive subsequent syncs. Raw evidence, normalised accounts/transactions, a completed job and its audit event commit together in the ingestion RPC. If the transaction fails, none of those changes commit. A failed-job scheduler and external alerting are future work; a failed sync returns an error and does not manufacture a completed job.
 
@@ -31,15 +32,19 @@ Transaction uniqueness is `(organisation_id, account_id, provider_transaction_id
 
 `set_transaction_category(transaction_id uuid, category_id uuid) → void` checks the transaction's organisation against current owner/admin membership, validates the category and records the previous/new category IDs in an audit event. Pass null to clear a category. Viewers and other tenants are rejected. Callers cannot change the amount, account, posting date or provider data through this RPC.
 
-`create_live_organisation(name text) → uuid` is production-only and idempotently creates an owned non-demo workspace with Kilcoy, Burpengary and Group finance. `set_account_entity(account_id, entity_id) → void` lets an owner/admin assign an imported account to a same-tenant clinic/group entity and records an audit event.
+`set_transaction_categories(transaction_ids uuid[], category_id uuid) → integer` applies one category to up to 1,000 explicitly selected rows. Every row must be accessible to the editor; an inaccessible or concurrently removed row rolls back the entire batch. Each changed row has an audit event and the returned count must match the requested distinct IDs.
+
+`create_live_organisation(name text) → uuid` is production-only and idempotently creates an owned non-demo workspace with Kilcoy, Burpengary and Group finance. There is deliberately no account-reassignment RPC: the selected legal-entity consent establishes account ownership.
 
 `ingest_mock_dataset(organisation_id uuid, actor_user_id uuid, dataset jsonb) → jsonb` is executable only by `service_role`, never authenticated/anonymous users. It rechecks editor membership and demo eligibility inside the atomic write, and serialises syncs by locking the organisation. The Edge Function generates the dataset; request bodies cannot supply it.
 
-`ingest_basiq_snapshot`, profile lookup/save/refresh claims and purge RPCs are executable only by `service_role` and run with invoker privileges. Live ingestion locks the private profile, rejects cross-tenant identifier collisions, preserves manual categorisation/account assignment and commits the snapshot plus job/audit result atomically.
+`ingest_basiq_snapshot`, entity-scoped profile lookup/save/refresh claims and purge RPCs are executable only by `service_role` and run with invoker privileges. Live ingestion locks the private profile, rejects cross-tenant or cross-entity identifier collisions, preserves manual categorisation and commits the snapshot plus job/audit result atomically.
+
+Manual and scheduled fetches claim a profile-specific generation before contacting Basiq. Ordered ingestion/purge rejects an older generation after a newer result commits, preventing overlapping refreshes from regressing balances or deleting newly imported accounts.
 
 ## Edge Functions
 
-All accept `POST` with JSON `{ "organisationId": "UUID" }`, an authenticated user JWT in `Authorization: Bearer …`, and the project's public API key. The handler validates the JWT through Supabase Auth `getUser()` and checks owner/admin membership before acting. OPTIONS handles CORS only. No data work occurs during preflight. Configuration uses `verify_jwt=false` because handlers explicitly validate user tokens, including current asymmetric signing-key tokens; this is not unauthenticated access.
+Browser banking endpoints accept `POST` with JSON `{ "organisationId": "UUID", "entityId": "UUID" }`, an authenticated user JWT in `Authorization: Bearer …`, and the project's public API key. A workspace-wide manual refresh may omit `entityId`; it processes only existing private profiles. The handler validates the JWT through Supabase Auth `getUser()` and checks owner/admin membership before acting. OPTIONS handles CORS only. No data work occurs during preflight. Configuration uses `verify_jwt=false` because handlers explicitly validate user tokens, including current asymmetric signing-key tokens; this is not unauthenticated access.
 
 | Endpoint                 | Version 0.3 behavior                                                                            |
 | ------------------------ | ----------------------------------------------------------------------------------------------- |

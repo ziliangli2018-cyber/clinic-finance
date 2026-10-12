@@ -14,6 +14,7 @@ This is an early functional foundation, not a production security certification.
 - Atomic mock ingestion repeats authorization, applies idempotent transaction keys and preserves manual category choices.
 - Multiple explicit mock gates fail closed, including a default production/mock-disabled database configuration.
 - Multiple independent live-provider gates fail closed. Institution IDs are allowlisted, provider pagination cannot leave Basiq's origin/user scope, and only masked account identifiers are persisted.
+- Kilcoy, Burpengary and the selected loan borrower use independent private provider users. Composite connection/account keys prevent an imported account from being relabelled into another legal entity.
 - Manual bank refresh has a database-enforced cooldown. Scheduled sync uses a separate high-entropy header secret and is never invoked by frontend code.
 - Consent expiry/revocation deletes imported bank data; explicit disconnection revokes provider access before deleting the private profile.
 - Private receipt storage, 10 MiB limit and a restricted MIME allowlist. Tenant members may read objects under their organisation prefix; upload/update/delete are not exposed in 0.1.
@@ -25,7 +26,7 @@ The source repository is public. The default GitHub Pages workflow publishes `pu
 
 Hosted builds do not offer public registration. Disable new-user signup in the hosted Supabase Auth service as well; hiding the form alone is not an access control. Provision the owner's account through the Supabase administration flow and let the owner set their own password. Organisation membership and RLS still enforce record access even if an unrecognised account were created. Keep real financial data out of the separate hosted demo project.
 
-`VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are public client configuration. They are safe to ship only because RLS and server authorization enforce access. The service-role key bypasses RLS and must never appear in `VITE_*`, static bundles, checked-in files, browser storage, logs or screenshots. Basiq API keys, business profiles and the scheduler secret must stay in Supabase backend secret storage and never use a `VITE_*` name.
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are public client configuration. They are safe to ship only because RLS and server authorization enforce access. The service-role key bypasses RLS and must never appear in `VITE_*`, static bundles, checked-in files, browser storage, logs or screenshots. Basiq API keys, the entity-keyed business-profile map and the scheduler secret must stay in Supabase backend secret storage and never use a `VITE_*` name.
 
 Use a dedicated Supabase project for demo data and a different project for production. Apply only migrations to production; local `seed.sql` explicitly enables mock mode and must not be applied there. Keep the production runtime config at its migration defaults and set Edge `APP_ENV=production`, `ALLOW_MOCK_DATA=false`. Limit `CORS_ALLOWED_ORIGINS` to the actual deployed frontend origin. Configure Supabase Auth Site URL and redirect allowlist for the deployed frontend; hash routes do not need broad wildcard URL allowances.
 

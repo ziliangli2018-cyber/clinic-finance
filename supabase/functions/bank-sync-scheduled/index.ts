@@ -5,9 +5,22 @@ import { failure, HttpError, preflight, response } from '../_shared/http.ts';
 function equalSecret(left: string, right: string): boolean {
   const length = Math.max(left.length, right.length);
   let difference = left.length ^ right.length;
-  for (let index = 0; index < length; index += 1)
+  for (let index = 0; index < length; index += 1) {
     difference |= (left.charCodeAt(index) || 0) ^ (right.charCodeAt(index) || 0);
+  }
   return difference === 0;
+}
+
+function claimedGeneration(value: unknown): number {
+  const generation = typeof value === 'string' ? Number(value) : value;
+  if (typeof generation !== 'number' || !Number.isSafeInteger(generation) || generation <= 0) {
+    throw new Error('Unable to order banking refresh');
+  }
+  return generation;
+}
+
+function staleResult(value: unknown): boolean {
+  return Boolean(value && typeof value === 'object' && (value as Record<string, unknown>).skipped);
 }
 
 export async function handler(request: Request): Promise<Response> {
@@ -16,14 +29,18 @@ export async function handler(request: Request): Promise<Response> {
   try {
     const expected = Deno.env.get('BANK_SYNC_SCHEDULER_SECRET') ?? '';
     const supplied = request.headers.get('x-scheduler-secret') ?? '';
-    if (expected.length < 32 || !equalSecret(supplied, expected))
+    if (expected.length < 32 || !equalSecret(supplied, expected)) {
       throw new HttpError(401, 'Scheduler authentication required');
+    }
     const config = basiqConfig();
-    if (!config || !config.automaticSync)
+    if (!config || !config.automaticSync) {
       throw new HttpError(503, 'Automatic banking sync is not configured');
+    }
     const url = Deno.env.get('SUPABASE_URL');
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    if (!url || !serviceKey) throw new HttpError(503, 'Server configuration unavailable');
+    if (!url || !serviceKey) {
+      throw new HttpError(503, 'Server configuration unavailable');
+    }
     const admin = createClient(url, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
@@ -35,6 +52,15 @@ export async function handler(request: Request): Promise<Response> {
     let failed = 0;
     for (const profile of profiles ?? []) {
       try {
+        const { data: generationValue, error: generationError } = await admin.rpc(
+          'claim_basiq_snapshot',
+          {
+            profile_id: profile.profile_id,
+            actor_user_id: null,
+          },
+        );
+        if (generationError) throw new Error('Unable to order banking refresh');
+        const syncGeneration = claimedGeneration(generationValue);
         const dataset = await basiq.snapshot(
           String(profile.provider_user_id),
           String(profile.organisation_id),
@@ -44,13 +70,13 @@ export async function handler(request: Request): Promise<Response> {
             dataset.connectionState === 'not_connected' ||
             dataset.connectionState === 'consent_required'
           ) {
-            const { error: purgeError } = await admin.rpc('purge_basiq_data', {
+            const { data: didPurge, error: purgeError } = await admin.rpc('purge_basiq_snapshot', {
               profile_id: profile.profile_id,
               actor_user_id: null,
-              remove_profile: false,
+              sync_generation: syncGeneration,
             });
             if (purgeError) throw new Error('Bank data cleanup failed');
-            purged += 1;
+            if (didPurge) purged += 1;
           }
           continue;
         }
@@ -59,13 +85,14 @@ export async function handler(request: Request): Promise<Response> {
           ...connection,
           last_synced_at: connection.status === 'active' ? syncedAt : connection.last_synced_at,
         }));
-        const { error: ingestError } = await admin.rpc('ingest_basiq_snapshot', {
+        const { data, error: ingestError } = await admin.rpc('ingest_basiq_snapshot_ordered', {
           profile_id: profile.profile_id,
           actor_user_id: null,
+          sync_generation: syncGeneration,
           dataset,
         });
         if (ingestError) throw new Error('Banking ingestion failed');
-        synced += 1;
+        if (!staleResult(data)) synced += 1;
       } catch {
         // Per-profile failures are counted without logging financial data or provider responses.
         failed += 1;

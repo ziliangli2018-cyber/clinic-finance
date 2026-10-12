@@ -50,12 +50,14 @@ jobs:
       - name: Select deployment environment and asset base
         shell: bash
         env:
-          DEPLOY_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_env || 'public-demo' }}
+          REQUESTED_DEPLOY_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_env || '' }}
+          PUSH_DEPLOY_ENV: ${{ vars.PAGES_DEPLOY_ENV }}
           PAGES_BASE_PATH: ${{ vars.PAGES_BASE_PATH }}
         run: |
+          DEPLOY_ENV="${REQUESTED_DEPLOY_ENV:-${PUSH_DEPLOY_ENV:-public-demo}}"
           case "$DEPLOY_ENV" in
             public-demo|hosted-demo|production) ;;
-            *) echo "::error::DEPLOY_ENV must be public-demo, hosted-demo or production"; exit 1 ;;
+            *) echo "::error::The requested deployment environment must be public-demo, hosted-demo or production"; exit 1 ;;
           esac
           repo_name="${GITHUB_REPOSITORY#*/}"
           base="${PAGES_BASE_PATH:-/$repo_name/}"
@@ -79,16 +81,16 @@ jobs:
         env:
           VITE_APP_ENV: demo
           VITE_DATA_MODE: supabase
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_URL: ${{ vars.HOSTED_DEMO_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.HOSTED_DEMO_SUPABASE_PUBLISHABLE_KEY }}
       - name: Build production site with public Supabase configuration
         if: env.DEPLOY_ENV == 'production'
         run: npm run build:production
         env:
           VITE_APP_ENV: production
           VITE_DATA_MODE: supabase
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_URL: ${{ vars.PRODUCTION_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.PRODUCTION_SUPABASE_PUBLISHABLE_KEY }}
       - name: Upload static assets only
         uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
         with:

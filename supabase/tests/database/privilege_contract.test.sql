@@ -55,8 +55,8 @@ select ok(
   'Authenticated owners can create a live workspace'
 );
 select ok(
-  has_function_privilege('authenticated', 'public.set_account_entity(uuid,uuid)', 'EXECUTE'),
-  'Authenticated editors can assign imported accounts'
+  to_regprocedure('public.set_account_entity(uuid,uuid)') is null,
+  'Cross-entity account assignment RPC does not exist'
 );
 select ok(
   not has_function_privilege('anon', 'public.create_live_organisation(text)', 'EXECUTE'),

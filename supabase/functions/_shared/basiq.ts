@@ -31,7 +31,7 @@ type ConsentAction = 'connect' | 'manage' | 'extend' | 'reauthorise';
 export interface BasiqConfig {
   apiKey: string;
   allowedInstitutionIds: string[];
-  businessProfile: Json;
+  businessProfiles: Record<string, Json>;
   automaticSync: boolean;
 }
 
@@ -220,6 +220,22 @@ function businessProfile(value: unknown): Json {
   };
 }
 
+function businessProfiles(value: unknown): Record<string, Json> {
+  const profiles = record(value);
+  const validated: Record<string, Json> = {};
+  for (const [entityId, profile] of Object.entries(profiles)) {
+    if (!/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(entityId))
+      throw new HttpError(503, 'Business onboarding profile key must be an entity UUID');
+    validated[entityId] = businessProfile(profile);
+  }
+  return validated;
+}
+
+export function businessProfileFor(config: BasiqConfig, entityId: string): Json | null {
+  if (!/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(entityId)) return null;
+  return config.businessProfiles[entityId] ?? null;
+}
+
 export function basiqConfig(): BasiqConfig | null {
   if (
     Deno.env.get('APP_ENV') !== 'production' ||
@@ -238,8 +254,8 @@ export function basiqConfig(): BasiqConfig | null {
     return {
       apiKey,
       allowedInstitutionIds,
-      businessProfile: businessProfile(
-        JSON.parse(Deno.env.get('BASIQ_BUSINESS_PROFILE') ?? 'null'),
+      businessProfiles: businessProfiles(
+        JSON.parse(Deno.env.get('BASIQ_BUSINESS_PROFILES') ?? '{}'),
       ),
       automaticSync: Deno.env.get('BASIQ_AUTOMATIC_SYNC') === 'true',
     };
@@ -316,7 +332,7 @@ export class Basiq {
     private now = () => Date.now(),
   ) {}
 
-  private async send(url: string, init: RequestInit): Promise<unknown> {
+  private async send(url: string, init: RequestInit, notFoundIsMissing = false): Promise<unknown> {
     let result: Response;
     try {
       result = await this.fetcher(url, {
@@ -327,13 +343,15 @@ export class Basiq {
     } catch {
       throw new HttpError(503, 'Banking provider unavailable; please try again later');
     }
-    if (!result.ok)
+    if (!result.ok) {
+      if (notFoundIsMissing && result.status === 404) return null;
       throw new HttpError(
         result.status === 429 ? 429 : 502,
         result.status === 429
           ? 'Bank refresh limit reached; please try again later'
           : 'Banking provider request failed',
       );
+    }
     if (result.status === 204) return null;
     const raw = await result.text();
     if (raw.length > 8_000_000) throw new HttpError(502, 'Banking response too large');
@@ -390,23 +408,32 @@ export class Basiq {
     return this.issuing;
   }
 
-  private async api(path: string, method = 'GET', body?: Json): Promise<unknown> {
+  private async api(
+    path: string,
+    method = 'GET',
+    body?: Json,
+    notFoundIsMissing = false,
+  ): Promise<unknown> {
     const url = new URL(path, BASIQ_ORIGIN);
     if (url.origin !== BASIQ_ORIGIN || url.username || url.password || url.hash)
       throw new HttpError(502, 'Unsafe banking request');
-    return this.send(url.href, {
-      method,
-      headers: {
-        Authorization: `Bearer ${await this.token()}`,
-        'basiq-version': '3.0',
-        Accept: 'application/json',
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
+    return this.send(
+      url.href,
+      {
+        method,
+        headers: {
+          Authorization: `Bearer ${await this.token()}`,
+          'basiq-version': '3.0',
+          Accept: 'application/json',
+          ...(body ? { 'Content-Type': 'application/json' } : {}),
+        },
+        ...(body ? { body: JSON.stringify(body) } : {}),
       },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-    });
+      notFoundIsMissing,
+    );
   }
 
-  private async all(path: string, userId: string): Promise<Json[]> {
+  private async all(path: string, userId: string, notFoundIsMissing = false): Promise<Json[]> {
     let next: string | null = new URL(path, BASIQ_ORIGIN).href;
     const output: Json[] = [];
     const pages = new Set<string>();
@@ -414,19 +441,19 @@ export class Basiq {
       if (pages.has(next) || pages.size >= 200)
         throw new HttpError(502, 'Banking history exceeds safe import limits');
       pages.add(next);
-      const page = record(await this.api(next));
+      const result = await this.api(next, 'GET', undefined, notFoundIsMissing);
+      if (result === null && notFoundIsMissing) return [];
+      const page = record(result);
       output.push(...rows(page));
       next = safeNext(record(page.links ?? {}).next, userId);
     }
     return output;
   }
 
-  async createUser(email: string): Promise<string> {
+  async createUser(email: string, profile: Json): Promise<string> {
     if (!/^\S+@\S+\.\S+$/.test(email) || email.length > 320)
       throw new HttpError(400, 'A verified account email is required');
-    return providerId(
-      record(await this.api('/users', 'POST', { email, ...this.config.businessProfile })).id,
-    );
+    return providerId(record(await this.api('/users', 'POST', { email, ...profile })).id);
   }
 
   async consentUrl(userId: string, action: ConsentAction): Promise<string> {
@@ -468,8 +495,8 @@ export class Basiq {
       throw new HttpError(503, 'Bank refresh is still processing; check again shortly');
   }
 
-  private async providerConnections(userId: string): Promise<Json[]> {
-    return this.all(`/users/${providerId(userId)}/connections`, userId);
+  private async providerConnections(userId: string, notFoundIsMissing = false): Promise<Json[]> {
+    return this.all(`/users/${providerId(userId)}/connections`, userId, notFoundIsMissing);
   }
 
   private async consentState(userId: string): Promise<{
@@ -658,14 +685,14 @@ export class Basiq {
 
   async disconnect(userId: string): Promise<void> {
     const path = `/users/${providerId(userId)}`;
-    const consents = await this.all(`${path}/consents`, userId);
+    const consents = await this.all(`${path}/consents`, userId, true);
     for (const consent of consents)
       if (consent.status === 'active')
-        await this.api(`${path}/consents/${providerId(consent.id)}`, 'DELETE');
+        await this.api(`${path}/consents/${providerId(consent.id)}`, 'DELETE', undefined, true);
     // Consent removal may also remove connections, so re-read before deleting leftovers.
-    for (const connection of await this.providerConnections(userId))
-      await this.api(`${path}/connections/${providerId(connection.id)}`, 'DELETE');
-    await this.api(path, 'DELETE');
+    for (const connection of await this.providerConnections(userId, true))
+      await this.api(`${path}/connections/${providerId(connection.id)}`, 'DELETE', undefined, true);
+    await this.api(path, 'DELETE', undefined, true);
   }
 }
 

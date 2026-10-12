@@ -6,7 +6,6 @@ vi.mock('../src/services/supabase', () => ({
 }));
 
 import {
-  assignAccountToEntity,
   bankingConsentUrl,
   createLiveOrganisation,
   disconnectBank,
@@ -15,6 +14,7 @@ import {
 } from '../src/services/finance';
 
 const status = {
+  entityId: 'kilcoy-entity',
   configured: true,
   provider: 'basiq',
   connectionState: 'active',
@@ -57,8 +57,29 @@ describe('hosted bank consent boundary', () => {
   });
 
   it('does not forward an untrusted redirect from the backend', async () => {
-    invoke.mockResolvedValue({ data: { url: 'https://evil.example/home' }, error: null });
-    await expect(bankingConsentUrl('owned-org', 'connect')).rejects.toThrow('invalid');
+    invoke.mockResolvedValue({
+      data: { entityId: 'kilcoy-entity', url: 'https://evil.example/home' },
+      error: null,
+    });
+    await expect(bankingConsentUrl('owned-org', 'kilcoy-entity', 'connect')).rejects.toThrow(
+      'invalid',
+    );
+    expect(invoke).toHaveBeenCalledWith('bank-connect', {
+      body: { organisationId: 'owned-org', entityId: 'kilcoy-entity', action: 'connect' },
+    });
+  });
+
+  it('does not forward a consent token issued for another legal entity', async () => {
+    invoke.mockResolvedValue({
+      data: {
+        entityId: 'burpengary-entity',
+        url: 'https://consent.basiq.io/home?token=synthetic',
+      },
+      error: null,
+    });
+    await expect(bankingConsentUrl('owned-org', 'kilcoy-entity', 'connect')).rejects.toThrow(
+      'unavailable',
+    );
   });
 
   it('creates a live workspace without demo seeding', async () => {
@@ -71,30 +92,36 @@ describe('hosted bank consent boundary', () => {
   });
 });
 
-describe('bank status and account ownership actions', () => {
+describe('bank status and legal-entity consent actions', () => {
   it('validates every connection and scheduling fact', async () => {
     invoke.mockResolvedValue({ data: status, error: null });
-    await expect(loadBankingStatus('owned-org')).resolves.toEqual(status);
+    await expect(loadBankingStatus('owned-org', 'kilcoy-entity')).resolves.toEqual(status);
+    expect(invoke).toHaveBeenCalledWith('bank-connect', {
+      body: { organisationId: 'owned-org', entityId: 'kilcoy-entity', action: 'status' },
+    });
     invoke.mockResolvedValue({
       data: { ...status, connections: [{ ...status.connections[0], institutionId: 1001 }] },
       error: null,
     });
-    await expect(loadBankingStatus('owned-org')).rejects.toThrow('status is unavailable');
+    await expect(loadBankingStatus('owned-org', 'kilcoy-entity')).rejects.toThrow(
+      'status is unavailable',
+    );
   });
 
   it('does not expose provider error text and requires confirmed disconnection', async () => {
     invoke.mockResolvedValue({ data: null, error: new Error('private-provider-detail') });
-    await expect(loadBankingStatus('owned-org')).rejects.not.toThrow('private-provider-detail');
-    invoke.mockResolvedValue({ data: { disconnected: false }, error: null });
-    await expect(disconnectBank('owned-org')).rejects.toThrow('could not be disconnected');
-  });
-
-  it('assigns an imported account through a narrow RPC', async () => {
-    rpc.mockResolvedValue({ data: null, error: null });
-    await assignAccountToEntity('account-one', 'kilcoy-entity');
-    expect(rpc).toHaveBeenCalledWith('set_account_entity', {
-      account_id: 'account-one',
-      entity_id: 'kilcoy-entity',
+    await expect(loadBankingStatus('owned-org', 'kilcoy-entity')).rejects.not.toThrow(
+      'private-provider-detail',
+    );
+    invoke.mockResolvedValue({
+      data: { entityId: 'kilcoy-entity', disconnected: false },
+      error: null,
+    });
+    await expect(disconnectBank('owned-org', 'kilcoy-entity')).rejects.toThrow(
+      'could not be disconnected',
+    );
+    expect(invoke).toHaveBeenLastCalledWith('bank-connect', {
+      body: { organisationId: 'owned-org', entityId: 'kilcoy-entity', action: 'disconnect' },
     });
   });
 });

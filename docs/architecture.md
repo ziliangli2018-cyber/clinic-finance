@@ -43,13 +43,13 @@ GitHub Actions validates and deploys frontend assets. It has no banking or produ
 | `demo/supabase`        | Hosted Postgres via Auth/RLS and Edge Functions | Approved Supabase user | Authenticated hosted demo, built with Vite mode `hosted-demo`                           |
 | `production/supabase`  | Hosted Postgres via Auth/RLS and Edge Functions | Supabase user          | Separately activated production deployment; empty until approved onboarding and consent |
 
-Mock mode is a separate development adapter, not a database replacement. Supabase mode does not silently fall back to fictitious data on an error. The Pages workflow publishes `public-demo` by default and allows an explicit manual selection of `hosted-demo` or `production`. The latter two builds require an HTTPS Supabase endpoint and a public key, disallow frontend mock mode and exclude mock data from the frontend bundle. Backend demo provisioning separately requires a non-production environment, an explicit mock-data flag, matching database runtime settings and a demo organisation.
+Mock mode is a separate development adapter, not a database replacement. Supabase mode does not silently fall back to fictitious data on an error. The Pages workflow publishes `public-demo` when its push-target variable is unset, allows an explicit manual selection of `hosted-demo` or `production`, and can be pinned to production at approved go-live so later pushes do not replace it with the demo. Hosted demo and production use distinct public Supabase variables. Both require an HTTPS Supabase endpoint and a public key, disallow frontend mock mode and exclude mock data from the frontend bundle. Backend demo provisioning separately requires a non-production environment, an explicit mock-data flag, matching database runtime settings and a demo organisation.
 
 The selected hosted demo project is `clinic-finance-demo` (`gackqbplslckvdyijivb`) in Sydney. Its configuration is documented in [deployment](deployment.md); provisioning and verification of that hosted environment are distinct from local test results. Real financial data belongs in a separate production project with mock provisioning disabled.
 
 ## Domain model and calculations
 
-An organisation owns business entities. The demo presents Kilcoy, Burpengary, Group finance and Personal; a live workspace starts with the first three. A bank connection belongs to the organisation/group boundary, while each account can be independently assigned to a clinic or Group finance. Accounts own transactions.
+An organisation owns business entities. The demo presents Kilcoy, Burpengary, Group finance and Personal; a live workspace starts with the first three. In production, each legal entity has its own private Basiq business user and consent profile. A bank connection and every account imported through it inherit that entity, and a composite foreign key prevents later cross-entity reassignment. Accounts own transactions.
 
 Amounts use signed integer AUD cents, with inflows positive and outflows negative. Posting dates use ISO calendar dates. A provider transaction identifier supports repeatable ingestion. The mock pipeline retains invented provider evidence for testing; the Basiq path deliberately persists only validated normalised fields and private provider identifiers. Categorisation and audit records add interpretation without rewriting provider facts.
 
@@ -67,7 +67,7 @@ Authentication uses Supabase in the browser. The sign-in gate protects workspace
 
 The mock provider remains available only behind demo gates. Version 0.3 adds a separate production Basiq v3 adapter covering business-user creation, hosted consent, multiple Open Banking connections, refresh jobs, NAB/BOQ Specialist normalisation, consent status and disconnection. It remains disabled until every production configuration and provider-approval gate passes.
 
-The trusted pipeline checks the caller, checks tenant access, obtains provider data, validates institution/connection/account scope, normalises values and atomically upserts accounts and transactions. Provider identifiers and unique constraints establish ingestion idempotency. Manual clinic assignments and categories survive provider refreshes. See [banking integration](banking-integration.md) for the exact boundaries.
+The trusted pipeline checks the caller, tenant and selected legal entity, obtains provider data, validates institution/connection/account scope, normalises values and atomically upserts accounts and transactions. Provider identifiers and unique constraints establish ingestion idempotency. Legal ownership is fixed by consent while manual categories survive provider refreshes. See [banking integration](banking-integration.md) for the exact boundaries.
 
 ## Future server-side modules
 

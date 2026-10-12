@@ -4,12 +4,11 @@ This runbook activates the code for the Kilcoy NAB accounts, Burpengary NAB acco
 
 ## 1. Confirm the legal-entity model
 
-Before provider onboarding, record whether Kilcoy and Burpengary are locations/trading names of one legal entity or separate entities with separate ABNs/ACNs.
+Kilcoy and Burpengary are separate legal entities. The application therefore creates a separate Basiq Business Consumer user, consent history and refresh limit for each clinic. An imported connection, account and transaction remains attached to the entity whose consent created it; the browser cannot move it across clinic boundaries.
 
-- One entity: one Basiq Business Consumer user can connect both NAB account groups and the BOQ Specialist loan, then each imported account is assigned in the app.
-- Separate entities: use separately owned production workspaces/business users (the current UI supports one banking profile per workspace), or extend the UI and provisioning model before connecting. Do not place one entity's consent under another entity's profile.
+The BOQ Specialist loan must be connected from the card for its actual legal borrower. Use Group finance only if that entity is the borrower. If Kilcoy or Burpengary is the borrower, connect the loan from that clinic's card. Do not infer ownership from the account nickname, repayment account or reporting preference.
 
-The business name, ABN/ACN, registered address and verification date supplied to the backend must match the business Basiq approves.
+For each profile, the legal business name, ABN/ACN, registered address and verification date supplied to the backend must exactly match the business Basiq approves.
 
 ## 2. Complete provider and bank prerequisites
 
@@ -23,7 +22,7 @@ Official references: [Basiq Business Consumer Consent](https://api.basiq.io/docs
 
 ## 3. Create the production Supabase project
 
-Use a new production project, not the hosted demo. Choose the appropriate Australian region and establish named owners, MFA, billing, backups/PITR, log retention and an incident contact.
+The production project is `clinic-finance-production` (`hwmljlkrqbidjnlhfako`) in Sydney (`ap-southeast-2`). It is separate from the hosted demo. Establish named owners, MFA, billing, backups/PITR, log retention and an incident contact.
 
 1. Disable public Auth signup and provision only approved users.
 2. Set the Auth site URL and redirect allowlist to the final HTTPS GitHub Pages/custom-domain URL.
@@ -57,10 +56,12 @@ BASIQ_ALLOWED_INSTITUTION_IDS=AU01001,AU20130
 BASIQ_AUTOMATIC_SYNC=true
 BANK_SYNC_SCHEDULER_SECRET=AT_LEAST_32_RANDOM_CHARACTERS
 CORS_ALLOWED_ORIGINS=https://YOUR_FINAL_FRONTEND_ORIGIN
-BASIQ_BUSINESS_PROFILE={...the approved verified business profile...}
+BASIQ_BUSINESS_PROFILES={"ENTITY_UUID":{...approved verified business profile...}}
 ```
 
-`BASIQ_BUSINESS_PROFILE` uses Basiq's business-user fields: `businessName`, `businessIdNo`, `businessIdNoType` (`ABN` or `ACN`), `businessAddress`, `verificationStatus:true` and `verificationDate` in `DD/MM/YYYY` form. Treat the full profile as protected configuration even though some registry facts may be public.
+`BASIQ_BUSINESS_PROFILES` is a JSON object keyed by the entity UUID created in the live workspace. Add separate entries for Kilcoy and Burpengary. Add the selected loan borrower only if it is not already one of those profiles. Every entry uses Basiq's business-user fields: `businessName`, `businessIdNo`, `businessIdNoType` (`ABN` or `ACN`), `businessAddress`, `verificationStatus:true` and `verificationDate` in `DD/MM/YYYY` form. Treat the full map as protected configuration even though some registry facts may be public.
+
+The operator's decision to use Basiq is not Basiq approval. Keep `BASIQ_ENABLED=false` and `BASIQ_BUSINESS_ONBOARDING_APPROVED=false` until Basiq has issued the production server key and confirmed the Business Consumer consent model in writing.
 
 Generate the scheduler secret with a cryptographically secure password manager. Supabase automatically injects its built-in URL and service-role credentials; never place those in the frontend.
 
@@ -68,28 +69,29 @@ Generate the scheduler secret with a cryptographically secure password manager. 
 
 Schedule one daily POST to the deployed `bank-sync-scheduled` Edge Function. Keep the scheduler secret in Supabase Vault or another server-side secret store and send it only as the `x-scheduler-secret` header. Do not call this endpoint from the browser or GitHub Pages.
 
-The scheduled function uses provider-cached data and processes all approved profiles. The app triggers at most one explicit provider refresh per 90 minutes per workspace (16 per day); requests between those refreshes import the latest provider cache. Monitor non-200/207 responses and the returned `failed` count without logging financial payloads.
+The scheduled function uses provider-cached data and processes all approved profiles. The app triggers at most one explicit provider refresh per 90 minutes per legal-entity profile (16 per day); requests between those refreshes import the latest provider cache. Monitor non-200/207 responses and the returned `failed` count without logging financial payloads.
 
 ## 6. Publish the authenticated frontend
 
 Add only these public values as GitHub repository variables:
 
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_PUBLISHABLE_KEY`
+- `PRODUCTION_SUPABASE_URL`
+- `PRODUCTION_SUPABASE_PUBLISHABLE_KEY`
+- `PAGES_DEPLOY_ENV=production` only when every go-live gate below is ready
 - optional `PAGES_BASE_PATH`
 
-Every `VITE_*` value is downloadable by visitors. Then run **Deploy GitHub Pages** on `main` with `deploy_env=production`. Update `CORS_ALLOWED_ORIGINS` and Supabase Auth redirects if GitHub reports a different final origin. The Pages workflow deploys only static assets and never receives Basiq/server secrets.
+The workflow maps the two production values to downloadable `VITE_*` browser configuration only during a production build. They must be the public project URL and publishable/anon key, never a secret or service-role key. Leave `PAGES_DEPLOY_ENV` unset or `public-demo` while the existing URL remains the fictional demo. At approved go-live, set it to `production`, then run **Deploy GitHub Pages** on `main` with `deploy_env=production`; later pushes will keep rebuilding production instead of replacing it with the demo. Update `CORS_ALLOWED_ORIGINS` and Supabase Auth redirects if GitHub reports a different final origin. The Pages workflow deploys only static assets and never receives Basiq/server secrets.
 
 ## 7. Run a controlled live pilot
 
 Use an approved owner account and complete these checks before relying on the dashboard:
 
 1. Create the workspace and confirm the three empty entities: Kilcoy, Burpengary and Group finance.
-2. Connect NAB, select only the intended Kilcoy and Burpengary business accounts, then refresh.
-3. Confirm masked account identities, current/available balances and a sample of transaction dates/amounts against NAB.
-4. Assign every NAB account to the correct clinic; refresh again and confirm assignments persist.
-5. Add BOQ Specialist using **Add bank or account**, select the exact loan and refresh.
-6. Confirm the loan appears as a liability under Group finance and is excluded from Available cash. Reassign it only if the accounting owner approves clinic attribution.
+2. From the Kilcoy card, connect NAB and select only accounts legally owned by Kilcoy. Repeat from the Burpengary card for accounts legally owned by Burpengary.
+3. Confirm masked account identities, legal-entity grouping, current/available balances and a sample of transaction dates/amounts against NAB.
+4. Refresh both profiles and confirm every account remains under the consenting clinic. There is no cross-entity reassignment control.
+5. From the confirmed borrower's card, add BOQ Specialist, select the exact loan and refresh.
+6. Confirm the loan appears as a liability under that borrower and is excluded from Available cash. If the wrong profile was used, disconnect and repeat consent under the correct borrower; do not relabel it in the database.
 7. Categorise test transactions, refresh, and confirm manual categories persist.
 8. Add or expose a test account at an existing institution, repeat consent/account election, and confirm it appears without code changes.
 9. Exercise consent management, expiry/renewal, revocation and full disconnect. Confirm revoked imported records are deleted and an audit event remains.

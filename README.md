@@ -2,7 +2,9 @@
 
 A finance workspace for a group of dental clinics, built with React, TypeScript, Vite and Supabase. GitHub holds the source, migrations, tests and documentation. GitHub Pages serves the static interface; Supabase is the trusted backend.
 
-**The public website uses fictitious banking data. It does not connect to real bank accounts.** The browser demo runs immediately without a Supabase project, simulates new activity, saves local changes on the device, forecasts cash flow and exports filtered transactions as CSV. Version 0.3 also contains a production-gated Basiq Open Banking backend for an authenticated Supabase deployment; it is disabled until commercial onboarding, server secrets and a live-account pilot are complete.
+**The public website uses fictitious banking data. It does not connect to real bank accounts.** Version 0.4 adds Frollo-inspired budgets, goals, recurring bills, spending insights, a portfolio overview and bulk transaction categorisation. Changes persist locally in the browser demonstration and in Supabase for authenticated workspaces. CSV exports and 30/60/90-day forecasts remain available. The Basiq Open Banking backend is production-gated until provider enablement, server secrets and bank consent are complete.
+
+The [Frollo feature map and REA investigation](docs/frollo-feature-map.md) record the public evidence, implemented workflows and remaining differences.
 
 Open the hosted demo: **[ziliangli2018-cyber.github.io/clinic-finance](https://ziliangli2018-cyber.github.io/clinic-finance/)**.
 
@@ -37,12 +39,14 @@ The repository is [**public**](https://github.com/ziliangli2018-cyber/clinic-fin
 
 ## What is implemented and what comes later
 
-| Implemented in version 0.3                                                    | Later modules                                     |
+| Implemented in version 0.4                                                    | Later modules                                     |
 | ----------------------------------------------------------------------------- | ------------------------------------------------- |
 | Kilcoy, Burpengary and Group finance account mapping                          | Receipt ingestion, OCR and invoice matching       |
-| Multi-institution Basiq consent, refresh, expiry and disconnection boundaries | User-managed budgets and forecast scenarios       |
+| Multi-institution Basiq consent, refresh, expiry and disconnection boundaries | Editable forecast scenarios                       |
+| Monthly budgets, savings goals, recurring bills and spending insights         | Transaction notes, tags and future rules          |
+| Bulk category edits, matching-merchant edits and amount filters               | Account history and off-bank asset tracking       |
 | NAB and BOQ Specialist account classes, including loans                       | Accounting and practice-management integrations   |
-| Tenant-isolated atomic ingestion preserving manual categories and assignments | Payroll and practice-management integrations      |
+| Tenant/entity-isolated ingestion preserving manual categories                 | Payroll and practice-management integrations      |
 | Daily scheduler endpoint plus rate-limited manual refresh                     | Provider webhook acceleration and alerting        |
 | 30/60/90-day forecast and formula-safe filtered CSV exports                   | Reviewed management and tax reporting             |
 | Public-demo, hosted-demo and production GitHub Pages builds                   | AI explanations of approved deterministic queries |

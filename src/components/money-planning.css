@@ -1,0 +1,775 @@
+.money-planning {
+  color: #35253c;
+}
+.mp-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+.mp-eyebrow {
+  display: block;
+  color: #a45976;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.13em;
+  margin-bottom: 9px;
+}
+.mp-intro h2 {
+  margin: 0 0 9px;
+  font-size: clamp(23px, 2.5vw, 32px);
+  letter-spacing: -0.045em;
+  font-weight: 700;
+}
+.mp-intro p {
+  margin: 0;
+  color: #897d8d;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.mp-primary,
+.mp-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 10px;
+  padding: 12px 17px;
+  min-height: 42px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mp-primary {
+  color: white;
+  background: #eb4d86;
+  box-shadow: 0 5px 15px #eb4d861b;
+}
+.mp-primary:hover {
+  background: #d93c74;
+}
+.mp-secondary {
+  background: #f3eef2;
+  color: #65576b;
+}
+.mp-primary:disabled,
+.mp-secondary:disabled,
+.mp-text-button:disabled,
+.mp-icon-button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.money-planning button:focus-visible,
+.money-planning a:focus-visible,
+.money-planning input:focus-visible,
+.money-planning select:focus-visible {
+  outline: 3px solid #c5356c;
+  outline-offset: 3px;
+}
+.mp-view-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+  font-size: 11px;
+  color: #8b7e8d;
+}
+.mp-view-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 650;
+  color: #66556d;
+}
+.mp-view-toolbar select,
+.mp-banner select {
+  font: inherit;
+  padding: 9px 30px 9px 12px;
+  border: 1px solid #e7dee5;
+  border-radius: 9px;
+  color: #59475f;
+  background: white;
+  max-width: 260px;
+}
+.mp-banner {
+  display: flex;
+  align-items: center;
+  gap: 25px;
+  background: #35253c;
+  color: #fff;
+  padding: 25px 28px;
+  border-radius: 17px;
+  margin-bottom: 23px;
+}
+.mp-banner > svg {
+  color: #f496b7;
+  flex-shrink: 0;
+}
+.mp-banner > div {
+  min-width: 155px;
+}
+.mp-banner span {
+  display: block;
+  color: #bfb0c4;
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+.mp-banner strong {
+  font-size: 27px;
+  font-weight: 600;
+  letter-spacing: -0.045em;
+}
+.mp-banner p {
+  margin: 0 0 0 auto;
+  font-size: 11px;
+  color: #d6cbd9;
+  line-height: 1.5;
+  max-width: 300px;
+}
+.mp-banner small {
+  display: block;
+  color: #ab9caf;
+  margin-top: 5px;
+  line-height: 1.6;
+  font-size: 10px;
+}
+.mp-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+.mp-plan-card {
+  padding: 25px;
+  background: #fff;
+  border: 1px solid #eee6ed;
+  border-radius: 16px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 5px 16px #35253c03;
+}
+.mp-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.mp-card-icon {
+  height: 40px;
+  width: 40px;
+  border-radius: 12px;
+  background: #fcebf2;
+  color: #d9477d;
+  display: grid;
+  place-items: center;
+}
+.mp-pill {
+  font-size: 9px;
+  color: #96809d;
+  font-weight: 700;
+  border-radius: 20px;
+  background: #f6f0f5;
+  padding: 6px 9px;
+}
+.mp-pill-attention {
+  color: #bc4770;
+  background: #fce7ee;
+}
+.mp-pill-positive {
+  color: #368977;
+  background: #e8f5f1;
+}
+.mp-plan-card h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+.mp-card-subtitle {
+  color: #968699;
+  font-size: 10px;
+  margin: 0 0 22px;
+  line-height: 1.6;
+}
+.mp-main-amount {
+  font-size: 23px;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+}
+.mp-main-amount > span {
+  display: inline-block;
+  font-size: 11px;
+  color: #a495a7;
+  font-weight: 450;
+  letter-spacing: 0;
+  margin-left: 4px;
+}
+.mp-progress {
+  height: 7px;
+  background: #f5edf3;
+  border-radius: 9px;
+  margin: 16px 0 10px;
+  overflow: hidden;
+}
+.mp-progress > span {
+  display: block;
+  height: 100%;
+  background: #eb4d86;
+  border-radius: 9px;
+  transition: width 0.25s ease;
+}
+.mp-progress-over > span {
+  background: #bf4164;
+}
+.mp-progress-caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+  color: #9d8fa1;
+}
+.mp-progress-caption strong {
+  color: #6c5674;
+  font-weight: 600;
+}
+.mp-card-note {
+  font-size: 10px;
+  color: #a093a3;
+  line-height: 1.8;
+  margin: 18px 0 0;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.mp-card-note svg {
+  flex-shrink: 0;
+}
+.mp-card-actions {
+  margin-top: auto;
+  padding-top: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.mp-card-actions > span {
+  font-size: 10px;
+  color: #975368;
+}
+.mp-text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 5px 0;
+  color: #ae5175;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+  text-decoration: none;
+}
+.mp-text-button:hover {
+  color: #d93974;
+}
+.mp-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px;
+  background: #f7f2f6;
+  color: #a895af;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.mp-danger {
+  color: #b8365e;
+}
+.mp-goal-note {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 17px 20px;
+  background: #f6edf3;
+  border-radius: 12px;
+  margin-bottom: 23px;
+  color: #996282;
+}
+.mp-goal-note > svg {
+  flex-shrink: 0;
+}
+.mp-goal-note p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.7;
+}
+.mp-goal-pace {
+  margin: 13px 0 0;
+  font-size: 10px;
+  font-weight: 650;
+  color: #9d5b7a;
+  line-height: 1.7;
+}
+.mp-form {
+  background: #fff;
+  border: 1px solid #efc7d7;
+  border-radius: 16px;
+  padding: 25px;
+  margin-bottom: 25px;
+  box-shadow: 0 6px 30px #dc538810;
+}
+.mp-form-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+.mp-form-heading h3 {
+  font-size: 17px;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+.mp-form-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.mp-form-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 11px;
+  color: #807086;
+  font-weight: 600;
+}
+.mp-form-fields input,
+.mp-form-fields select {
+  width: 100%;
+  height: 43px;
+  padding: 10px 12px;
+  border: 1px solid #e6dfe7;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 12px;
+  color: #54445c;
+  background: #fefcfe;
+  min-width: 0;
+}
+.mp-form-fields input::placeholder {
+  color: #b3a6b7;
+}
+.mp-form-hint {
+  margin: 18px 0;
+  font-size: 11px;
+  color: #948299;
+  line-height: 1.7;
+}
+.mp-form-footer {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.mp-form-error {
+  color: #b8365e;
+  font-size: 12px;
+}
+.mp-message {
+  padding: 13px 17px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 10px;
+  margin-bottom: 18px;
+  font-size: 12px;
+}
+.mp-error {
+  background: #fce9ef;
+  color: #b23e61;
+}
+.mp-success {
+  background: #edf7f2;
+  color: #4d8874;
+}
+.mp-loading {
+  padding: 40px;
+  text-align: center;
+  color: #9b869f;
+  font-size: 13px;
+}
+.mp-empty {
+  text-align: center;
+  border: 1px dashed #e5d5e0;
+  border-radius: 17px;
+  background: #fffcfd;
+  padding: 38px 20px;
+}
+.mp-empty > div {
+  height: 64px;
+  width: 64px;
+  border-radius: 50%;
+  background: #fcedf3;
+  color: #dd5786;
+  margin: 0 auto 18px;
+  display: grid;
+  place-items: center;
+}
+.mp-empty h3 {
+  font-size: 17px;
+  margin: 0 0 8px;
+  letter-spacing: -0.02em;
+}
+.mp-empty p {
+  font-size: 12px;
+  color: #a08da5;
+  margin: 0 0 20px;
+  line-height: 1.7;
+}
+.mp-bill-banner label {
+  color: #bdafc2;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mp-bill-banner select {
+  color: #fff;
+  background: #ffffff14;
+  border-color: #ffffff20;
+}
+.mp-bill-banner select option {
+  color: #35253c;
+}
+.mp-bill-list {
+  display: grid;
+  gap: 10px;
+}
+.mp-bill-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: #fff;
+  border: 1px solid #eee6ed;
+  border-radius: 13px;
+  padding: 18px 23px;
+}
+.mp-date-tile {
+  flex-shrink: 0;
+  height: 53px;
+  width: 50px;
+  background: #fcecf3;
+  color: #c85480;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+.mp-date-tile strong {
+  font-size: 21px;
+  line-height: 1.1;
+}
+.mp-date-tile span {
+  text-transform: uppercase;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  margin-top: 4px;
+  font-weight: 700;
+}
+.mp-bill-name {
+  flex: 1;
+  min-width: 0;
+}
+.mp-bill-name h3 {
+  font-size: 13px;
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+}
+.mp-bill-name p {
+  color: #a390a8;
+  font-size: 10px;
+  margin: 0;
+  line-height: 1.5;
+}
+.mp-bill-amount {
+  font-size: 16px;
+  text-align: right;
+  white-space: nowrap;
+}
+.mp-bill-amount small {
+  display: block;
+  font-size: 9px;
+  color: #ab9aae;
+  font-weight: 400;
+  margin-top: 5px;
+}
+.mp-bill-row .mp-card-actions {
+  margin: 0 0 0 10px;
+  padding: 0;
+  min-width: 83px;
+}
+.mp-later-bills {
+  margin-top: 24px;
+  background: #fff;
+  border: 1px solid #eee6ed;
+  padding: 20px;
+  border-radius: 13px;
+}
+.mp-later-bills h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+.mp-later-bills > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  padding: 12px 0;
+  border-top: 1px solid #f4edf2;
+  font-size: 12px;
+}
+.mp-later-bills small {
+  display: block;
+  color: #a390a8;
+  margin-top: 5px;
+  font-size: 10px;
+}
+.mp-later-bills .mp-card-actions {
+  margin: 0;
+  padding: 0;
+  gap: 16px;
+}
+.mp-detected {
+  margin-top: 35px;
+}
+.mp-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #c2638c;
+}
+.mp-section-heading h3 {
+  margin: 0;
+  font-size: 19px;
+  letter-spacing: -0.025em;
+  color: #503656;
+}
+.mp-section-note {
+  max-width: 710px;
+  font-size: 11px;
+  line-height: 1.8;
+  color: #9a879f;
+  margin: 13px 0 21px;
+}
+.mp-detected-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.mp-detected-card {
+  background: #fff;
+  border: 1px solid #ebdfeb;
+  padding: 20px;
+  border-radius: 13px;
+  min-width: 0;
+}
+.mp-detected-card h4 {
+  margin: 0 0 9px;
+  font-size: 12px;
+  color: #6b496e;
+  overflow-wrap: anywhere;
+}
+.mp-detected-card p {
+  font-size: 10px;
+  color: #a18ba5;
+  margin: 0 0 14px;
+  line-height: 1.8;
+}
+.mp-detected-card strong {
+  font-size: 19px;
+  display: block;
+  margin-bottom: 12px;
+}
+.mp-detected-card strong span {
+  font-size: 10px;
+  color: #ac91ad;
+  font-weight: 400;
+}
+.mp-detected-card small {
+  display: block;
+  font-size: 9px;
+  margin-top: 5px;
+}
+.mp-suggestion-empty {
+  padding: 25px;
+  color: #9f87a2;
+  background: #f5edf5;
+  border-radius: 12px;
+  font-size: 12px;
+  text-align: center;
+}
+.mp-insights-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+.mp-insight-card {
+  border: 1px solid #eee3ec;
+  background: #fff;
+  padding: 27px;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+}
+.mp-insight-icon {
+  display: flex;
+  align-items: center;
+  color: #c85b88;
+  margin-bottom: 22px;
+}
+.mp-insight-card h3 {
+  margin: 0 0 14px;
+  font-size: 18px;
+  line-height: 1.45;
+  letter-spacing: -0.03em;
+}
+.mp-insight-card p {
+  font-size: 11px;
+  line-height: 1.85;
+  color: #99809c;
+  margin: 0 0 20px;
+}
+.mp-insight-value {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  margin-bottom: 15px;
+}
+.mp-insight-card .mp-text-button {
+  margin-top: auto;
+}
+.mp-insight-attention {
+  background: linear-gradient(130deg, #fff 60%, #fff5f8);
+}
+.mp-insight-positive .mp-insight-icon {
+  color: #3e8b7a;
+}
+.mp-insight-positive .mp-eyebrow {
+  color: #67998c;
+}
+.mp-method {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 23px 0 0;
+  color: #a18aa7;
+  font-size: 10px;
+  line-height: 1.7;
+}
+.mp-method svg {
+  flex-shrink: 0;
+}
+@media (max-width: 1180px) {
+  .mp-card-grid,
+  .mp-insights-grid,
+  .mp-detected-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .mp-banner {
+    flex-wrap: wrap;
+  }
+  .mp-banner p {
+    margin-left: 0;
+    max-width: none;
+  }
+}
+@media (max-width: 760px) {
+  .mp-intro {
+    align-items: flex-start;
+  }
+  .mp-intro h2 {
+    font-size: 24px;
+  }
+  .mp-form-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .mp-view-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .mp-plan-card {
+    padding: 22px;
+  }
+  .mp-bill-row {
+    gap: 13px;
+    flex-wrap: wrap;
+    padding: 16px;
+  }
+  .mp-bill-row .mp-card-actions {
+    width: 100%;
+    margin: 0;
+    border-top: 1px solid #f3eaf1;
+    padding-top: 10px;
+  }
+  .mp-bill-amount {
+    font-size: 14px;
+  }
+  .mp-banner {
+    padding: 22px;
+    gap: 20px;
+  }
+  .mp-banner > div {
+    min-width: 130px;
+  }
+  .mp-banner strong {
+    font-size: 23px;
+  }
+}
+@media (max-width: 540px) {
+  .mp-intro {
+    flex-direction: column;
+    gap: 17px;
+  }
+  .mp-card-grid,
+  .mp-insights-grid,
+  .mp-detected-grid,
+  .mp-form-fields {
+    grid-template-columns: 1fr;
+  }
+  .mp-form {
+    padding: 21px;
+  }
+  .mp-view-toolbar label {
+    flex-wrap: wrap;
+  }
+  .mp-view-toolbar select {
+    max-width: 100%;
+  }
+  .mp-goal-note {
+    align-items: flex-start;
+  }
+  .mp-bill-banner > svg {
+    display: none;
+  }
+  .mp-bill-name {
+    flex-basis: calc(100% - 67px);
+  }
+  .mp-bill-amount {
+    text-align: left;
+    padding-left: 63px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mp-progress > span {
+    transition: none;
+  }
+}
