@@ -80,7 +80,11 @@ export function App() {
   const bankFinance = useFinance();
   const csvFinance = useCsvFinance();
   const [source, setSource] = useState<'bank' | 'csv'>(() =>
-    window.location.hash.startsWith('#/import') ? 'csv' : getWorkspaceSource(),
+    pendingBankConsentReturn()
+      ? 'bank'
+      : window.location.hash.startsWith('#/import')
+        ? 'csv'
+        : getWorkspaceSource(),
   );
   const [sourceError, setSourceError] = useState('');
   const csvMode = source === 'csv';

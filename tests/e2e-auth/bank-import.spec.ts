@@ -109,6 +109,18 @@ test('an active consent automatically imports and displays bank balances and tra
     });
   });
 
+  // Another tab may have selected CSV while the bank consent tab was away.
+  // A genuine pending return must still open the owned bank import flow.
+  await page.addInitScript(
+    ({ organisationId, entityId }) => {
+      localStorage.setItem('clinic-finance.workspace-source', 'csv');
+      sessionStorage.setItem(
+        'clinic-finance.bank-consent-return',
+        JSON.stringify({ organisationId, entityId, startedAt: Date.now() }),
+      );
+    },
+    { organisationId: organisation.id, entityId: entity.id },
+  );
   await page.goto('./#/settings');
   await page.getByLabel('Email address').fill(user.email);
   await page.getByLabel('Password', { exact: true }).fill('Synthetic-test-password-123');
@@ -117,6 +129,7 @@ test('an active consent automatically imports and displays bank balances and tra
     page.getByText('Bank balances and transactions imported.', { exact: true }),
   ).toBeVisible();
   expect(imports).toBe(1);
+  await expect(page.getByLabel('Workspace data source')).toHaveValue('bank');
   await page.getByRole('link', { name: 'Accounts', exact: true }).click();
   await expect(page.locator('.account-card')).toHaveCount(accounts.length);
   await expect(page.locator('.account-card').first()).toContainText('Kilcoy operating');
