@@ -724,7 +724,7 @@ function Dashboard({
       <div className="metric-grid">
         <Metric
           label={isCsvDataset(data) ? 'Statement cash balance' : 'Available cash'}
-          value={formatMoney(availableCash)}
+          value={formatMoney(isCsvDataset(data) ? cash : availableCash)}
           caption={
             isCsvDataset(data)
               ? 'Sum of entered cash-account balance snapshots'
@@ -921,14 +921,19 @@ function CashflowChart({ points, grouping = '' }: { points: CashflowPoint[]; gro
                     fill="#829198"
                     fontSize="10"
                   >
-                    {dateLabel(point.date)}
+                    {dateLabel(
+                      point.date,
+                      grouping ? { day: 'numeric', month: 'short', year: 'numeric' } : undefined,
+                    )}
                   </text>
                 ),
             )}
           </>
         )}
       </svg>
-      <p className="chart-note">Grouped in {size}-day periods · pending entries excluded</p>
+      <p className="chart-note">
+        {grouping || `Grouped in ${size}-day periods`} · pending entries excluded
+      </p>
     </div>
   );
 }
