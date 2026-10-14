@@ -2,15 +2,22 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { CalendarRange, CircleHelp, Repeat2, TrendingUp, Wallet } from 'lucide-react';
 import type { FinanceDataset, FinanceScope } from '../types/domain';
-import { formatCompactMoney, formatMoney } from '../domain/analytics';
+import {
+  filterAccounts,
+  formatCompactMoney,
+  formatMoney,
+  isCashAccount,
+} from '../domain/analytics';
 import { buildCashflowForecast } from '../domain/forecast';
+import { dateValue, shiftDate } from '../domain/dates';
 
 const horizons = [30, 60, 90] as const;
 
-const dateLabel = (date: string) =>
+const dateLabel = (date: string, includeYear = false) =>
   new Date(`${date}T00:00:00Z`).toLocaleDateString('en-AU', {
     day: 'numeric',
     month: 'short',
+    ...(includeYear ? { year: 'numeric' as const } : {}),
     timeZone: 'UTC',
   });
 
@@ -175,7 +182,50 @@ function ForecastMetric({
 
 export function CashflowForecast({ data, scope }: { data: FinanceDataset; scope: FinanceScope }) {
   const [horizon, setHorizon] = useState<(typeof horizons)[number]>(30);
-  const forecast = buildCashflowForecast(data, scope, horizon);
+  const statementAccounts = filterAccounts(data, scope).filter(isCashAccount);
+  const statementDates = new Set(
+    statementAccounts.map((account) => account.updatedAt.slice(0, 10)),
+  );
+  if (
+    data.organisation.dataSource === 'csv' &&
+    (!statementAccounts.length || statementDates.size !== 1)
+  )
+    return (
+      <section className="panel forecast-panel">
+        <div className="forecast-heading">
+          <div>
+            <span className="eyebrow">STATEMENT FORECAST</span>
+            <h2>
+              {statementAccounts.length
+                ? 'Align statement balance dates'
+                : 'Import a cash account to forecast'}
+            </h2>
+            <p>
+              {statementAccounts.length
+                ? 'A combined cash forecast needs closing balances for the same date. Select one clinic with aligned account dates, or import updated balance snapshots before projecting the combined cash position.'
+                : 'Loan balances are liabilities, not available cash. Import an operating, savings or transaction account with a dated closing balance.'}
+            </p>
+          </div>
+        </div>
+        <a className="button secondary" href="#/import">
+          Import updated statements
+        </a>
+      </section>
+    );
+  const cashSnapshotDate = [...statementDates][0];
+  const historySpan =
+    scope.from && scope.to
+      ? Math.max(0, Math.round((dateValue(scope.to) - dateValue(scope.from)) / 86_400_000))
+      : 179;
+  const forecastScope =
+    data.organisation.dataSource === 'csv'
+      ? {
+          ...scope,
+          to: cashSnapshotDate,
+          from: shiftDate(cashSnapshotDate, -Math.min(historySpan, 179)),
+        }
+      : scope;
+  const forecast = buildCashflowForecast(data, forecastScope, horizon);
   const change = forecast.closingBalanceCents - forecast.openingBalanceCents;
 
   return (
@@ -206,7 +256,7 @@ export function CashflowForecast({ data, scope }: { data: FinanceDataset; scope:
           <ForecastMetric
             label="Opening cash"
             value={formatMoney(forecast.openingBalanceCents)}
-            detail={`Balance at ${dateLabel(forecast.asOfDate)}`}
+            detail={`${data.organisation.dataSource === 'csv' ? 'Statement balance at' : 'Balance at'} ${dateLabel(forecast.asOfDate, data.organisation.dataSource === 'csv')}`}
             icon={<Wallet size={16} />}
           />
           <ForecastMetric

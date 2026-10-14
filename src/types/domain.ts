@@ -3,6 +3,8 @@ export interface Organisation {
   id: string;
   name: string;
   isDemo: boolean;
+  /** Statement-only workspaces are local and never sent to the banking backend. */
+  dataSource?: 'csv';
 }
 
 export interface Entity {
@@ -16,7 +18,7 @@ export interface BankConnection {
   id: string;
   organisationId: string;
   entityId: string;
-  provider: 'mock' | 'basiq';
+  provider: 'mock' | 'basiq' | 'csv';
   status: 'pending' | 'active' | 'error' | 'consent_required' | 'disconnected';
   lastSyncedAt: string | null;
   institutionId?: string | null;
