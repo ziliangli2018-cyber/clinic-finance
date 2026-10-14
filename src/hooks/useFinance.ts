@@ -28,6 +28,7 @@ export function useFinance() {
   const [simulationPaused, setSimulationPaused] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [simulationMessage, setSimulationMessage] = useState('');
+  const loadedOrganisationId = data?.organisation.id;
   const version = useRef(0);
   const actionRunning = useRef(false);
   const demoState = useRef<DemoState | null>(null);
@@ -57,39 +58,67 @@ export function useFinance() {
     },
     [commitDemoState],
   );
-  const refresh = useCallback(async () => {
-    const current = ++version.current;
-    setLoading(true);
-    setError('');
-    setData(null);
-    try {
-      if ((import.meta.env.VITE_DATA_MODE || 'mock') === 'mock') {
-        const { createMockDataset } = await import('@clinic-finance/mock-dataset');
-        const state = loadDemoState(createMockDataset());
-        if (current !== version.current) return;
-        demoState.current = state;
-        setData(state.dataset);
-        setSimulationPaused(state.paused);
-        setLastUpdatedAt(state.lastUpdatedAt);
-        setOrganisations([state.dataset.organisation]);
-      } else {
-        const orgs = await listOrganisations();
-        const selected =
-          orgs.find((org) => org.id === organisationId) ||
-          orgs.find((org) => !org.isDemo) ||
-          orgs[0];
-        const dataset = selected ? await loadDataset(selected) : null;
-        if (current !== version.current) return;
-        setOrganisations(orgs);
-        setData(dataset);
+  const refresh = useCallback(
+    async (options: { background?: boolean } = {}) => {
+      const current = ++version.current;
+      if (!options.background) {
+        setLoading(true);
+        setError('');
+        setData(null);
       }
-    } catch (error) {
-      if (current === version.current)
-        setError(error instanceof Error ? error.message : 'Could not load your workspace');
-    } finally {
-      if (current === version.current) setLoading(false);
-    }
-  }, [organisationId]);
+      try {
+        if ((import.meta.env.VITE_DATA_MODE || 'mock') === 'mock') {
+          const { createMockDataset } = await import('@clinic-finance/mock-dataset');
+          const state = loadDemoState(createMockDataset());
+          if (current !== version.current) return;
+          demoState.current = state;
+          setData(state.dataset);
+          setSimulationPaused(state.paused);
+          setLastUpdatedAt(state.lastUpdatedAt);
+          setOrganisations([state.dataset.organisation]);
+        } else {
+          const orgs = await listOrganisations();
+          const selected =
+            orgs.find((org) => org.id === organisationId) ||
+            orgs.find((org) => !org.isDemo) ||
+            orgs[0];
+          const dataset = selected ? await loadDataset(selected) : null;
+          if (current !== version.current) return;
+          setOrganisations(orgs);
+          setData(dataset);
+          setLastUpdatedAt(new Date().toISOString());
+        }
+      } catch (error) {
+        if (current === version.current)
+          setError(error instanceof Error ? error.message : 'Could not load your workspace');
+      } finally {
+        if (current === version.current) setLoading(false);
+      }
+    },
+    [organisationId],
+  );
+  useEffect(() => {
+    if (isMock || loading || !loadedOrganisationId) return;
+    let reading = false;
+    const readLatest = async () => {
+      if (document.visibilityState !== 'visible' || reading || actionRunning.current) return;
+      reading = true;
+      try {
+        await refresh({ background: true });
+      } finally {
+        reading = false;
+      }
+    };
+    const timer = window.setInterval(() => void readLatest(), 30_000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void readLatest();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [loadedOrganisationId, loading, refresh]);
   useEffect(() => {
     void refresh();
     // This is a request generation counter, not a DOM ref; invalidate all pending requests on cleanup.
@@ -186,13 +215,14 @@ export function useFinance() {
   }
   async function sync(entityId?: string) {
     if (!data) return;
-    await run(async () => {
+    return run(async () => {
       if (isMock) {
         advanceDemo(true);
       } else {
         await syncBank(data.organisation.id, entityId);
-        await refresh();
+        await refresh({ background: true });
       }
+      return true;
     });
   }
   async function createDemo(name: string) {

@@ -33,7 +33,12 @@ export function OverviewPortfolio({ data, scope }: { data: FinanceDataset; scope
               Liabilities <b>{formatMoney(debt)}</b>
             </span>
           </div>
-          <small>Connected account balances · property and other off-bank assets excluded</small>
+          <small>
+            {data.organisation.dataSource === 'csv'
+              ? 'Dated statement balances'
+              : 'Connected account balances'}{' '}
+            · property and other off-bank assets excluded
+          </small>
         </div>
         <div className="portfolio-accounts">
           <div className="portfolio-account-heading">
@@ -63,9 +68,20 @@ export function OverviewPortfolio({ data, scope }: { data: FinanceDataset; scope
               <strong>{formatMoney(account.balanceCents)}</strong>
             </NavLink>
           ))}
-          {!accounts.length && <p>Connect an account to see your financial picture.</p>}
-          <NavLink className="portfolio-connect" to="/settings">
-            + Connect another bank account
+          {!accounts.length && (
+            <p>
+              {data.organisation.dataSource === 'csv'
+                ? 'Import a statement to see your financial picture.'
+                : 'Connect an account to see your financial picture.'}
+            </p>
+          )}
+          <NavLink
+            className="portfolio-connect"
+            to={data.organisation.dataSource === 'csv' ? '/import' : '/settings'}
+          >
+            {data.organisation.dataSource === 'csv'
+              ? '+ Import another account statement'
+              : '+ Connect another bank account'}
           </NavLink>
         </div>
       </section>

@@ -8,6 +8,14 @@ import {
   loadBankingStatus,
   type BankingAction,
 } from '../services/finance';
+import {
+  clearBankConsentReturn,
+  pendingBankConsentReturn,
+  rememberBankConsentReturn,
+} from '../services/bank-consent-return';
+
+const initialImportWaitMs = 120_000;
+let initialImportOwner: string | null = null;
 
 const stateLabels: Record<BankingStatus['connectionState'], string> = {
   not_connected: 'No bank connected',
@@ -47,7 +55,7 @@ export function BankingConnections({
   entityKind: 'clinic' | 'group';
   workspaceBusy: boolean;
   enabled: boolean;
-  onRefresh: () => Promise<void>;
+  onRefresh: () => Promise<boolean>;
   onDisconnected: () => Promise<void>;
 }) {
   const [status, setStatus] = useState<BankingStatus | null>(null);
@@ -55,45 +63,154 @@ export function BankingConnections({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [importMessage, setImportMessage] = useState('');
   const requestVersion = useRef(0);
   const actionRunning = useRef(false);
+  const consentHandoff = useRef(false);
+  const statusRunning = useRef(false);
+  const initialImportStartedAt = useRef<number | null>(null);
+  const initialImportComplete = useRef(false);
+  const retryTimer = useRef<number | null>(null);
+  const refreshCallback = useRef(onRefresh);
+  const workspaceBusyRef = useRef(workspaceBusy);
+  const checkCallback = useRef<() => Promise<void>>(async () => {});
+  const scopeKey = `${organisationId}:${entityId}`;
   const dialog = useRef<HTMLDialogElement>(null);
   const disconnectTitleId = useId();
 
+  useEffect(() => {
+    refreshCallback.current = onRefresh;
+    workspaceBusyRef.current = workspaceBusy;
+  }, [onRefresh, workspaceBusy]);
+
   const refreshStatus = useCallback(async () => {
-    if (!enabled) return;
+    if (!enabled || statusRunning.current || actionRunning.current) return;
+    statusRunning.current = true;
     const current = ++requestVersion.current;
     setChecking(true);
-    setError('');
+    const releaseInitialImport = () => {
+      if (initialImportOwner === scopeKey) initialImportOwner = null;
+    };
+    const retry = () => {
+      if (current !== requestVersion.current) return;
+      if (Date.now() - (initialImportStartedAt.current ?? Date.now()) >= initialImportWaitMs) {
+        releaseInitialImport();
+        clearBankConsentReturn(organisationId, entityId);
+        setImportMessage('');
+        setError('The first bank import is still pending. Check the connection and retry below.');
+        return;
+      }
+      if (retryTimer.current !== null) window.clearTimeout(retryTimer.current);
+      retryTimer.current = window.setTimeout(() => void checkCallback.current(), 5_000);
+    };
     try {
       const result = await loadBankingStatus(organisationId, entityId);
-      if (current === requestVersion.current) setStatus(result);
+      if (current !== requestVersion.current) return;
+      setStatus(result);
+      setChecking(false);
+      const marker = pendingBankConsentReturn();
+      const returning = marker?.organisationId === organisationId && marker.entityId === entityId;
+      const firstImport = !result.lastSyncedAt && !initialImportComplete.current;
+      if (!result.configured || (!returning && (marker || !firstImport))) {
+        releaseInitialImport();
+        if (!result.configured) clearBankConsentReturn(organisationId, entityId);
+        return;
+      }
+      if (
+        result.connectionState !== 'active' &&
+        (!returning || !['pending', 'not_connected'].includes(result.connectionState))
+      ) {
+        releaseInitialImport();
+        clearBankConsentReturn(organisationId, entityId);
+        return;
+      }
+      initialImportStartedAt.current ??= Date.now();
+      if (Date.now() - initialImportStartedAt.current >= initialImportWaitMs) {
+        releaseInitialImport();
+        clearBankConsentReturn(organisationId, entityId);
+        setImportMessage('');
+        setError('The first bank import is still pending. Check the connection and retry below.');
+        return;
+      }
+      if (result.connectionState !== 'active') {
+        setImportMessage('Waiting for your bank to prepare balances and transactions…');
+        retry();
+        return;
+      }
+      if (
+        workspaceBusyRef.current ||
+        (initialImportOwner !== null && initialImportOwner !== scopeKey)
+      ) {
+        retry();
+        return;
+      }
+      initialImportOwner = scopeKey;
+      actionRunning.current = true;
+      setBusy(true);
+      setImportMessage('Importing your bank balances and transactions…');
+      const imported = await refreshCallback.current();
+      if (current !== requestVersion.current) return;
+      if (imported) {
+        initialImportComplete.current = true;
+        clearBankConsentReturn(organisationId, entityId);
+        releaseInitialImport();
+        setError('');
+        setImportMessage('Bank balances and transactions imported.');
+        const updated = await loadBankingStatus(organisationId, entityId);
+        if (current === requestVersion.current) setStatus(updated);
+      } else {
+        setError('Your first bank import has not completed yet. Checking again shortly.');
+        retry();
+      }
     } catch (caught) {
       if (current === requestVersion.current) {
-        setStatus(null);
         setError(caught instanceof Error ? caught.message : 'Unable to check bank connections.');
+        releaseInitialImport();
+        clearBankConsentReturn(organisationId, entityId);
+        setImportMessage('');
       }
     } finally {
-      if (current === requestVersion.current) setChecking(false);
+      if (current === requestVersion.current) {
+        statusRunning.current = false;
+        actionRunning.current = false;
+        setChecking(false);
+        setBusy(false);
+      }
     }
-  }, [enabled, entityId, organisationId]);
+  }, [enabled, entityId, organisationId, scopeKey]);
 
   useEffect(() => {
+    checkCallback.current = refreshStatus;
+    initialImportStartedAt.current = null;
+    initialImportComplete.current = false;
+    statusRunning.current = false;
+    actionRunning.current = false;
     void refreshStatus();
     const onFocus = () => {
+      if (consentHandoff.current) {
+        consentHandoff.current = false;
+        actionRunning.current = false;
+        setBusy(false);
+      }
       if (!actionRunning.current) void refreshStatus();
     };
     const onVisible = () => {
       if (document.visibilityState === 'visible') onFocus();
     };
     window.addEventListener('focus', onFocus);
+    window.addEventListener('pageshow', onFocus);
     document.addEventListener('visibilitychange', onVisible);
     return () => {
       requestVersion.current += 1;
+      statusRunning.current = false;
+      actionRunning.current = false;
+      if (retryTimer.current !== null) window.clearTimeout(retryTimer.current);
+      if (initialImportOwner === scopeKey) initialImportOwner = null;
       window.removeEventListener('focus', onFocus);
+      window.removeEventListener('pageshow', onFocus);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [refreshStatus]);
+  }, [refreshStatus, scopeKey]);
 
   useEffect(() => {
     if (confirmDisconnect) dialog.current?.showModal();
@@ -108,6 +225,8 @@ export function BankingConnections({
     try {
       const url = await bankingConsentUrl(organisationId, entityId, action);
       // Never retain the short-lived consent token in this app's URL or browser storage.
+      rememberBankConsentReturn(organisationId, entityId);
+      consentHandoff.current = true;
       window.location.assign(url);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to open bank consent.');
@@ -116,21 +235,56 @@ export function BankingConnections({
     }
   }
 
+  async function refreshData() {
+    if (actionRunning.current || workspaceBusy || !status?.configured) return;
+    if (retryTimer.current !== null) window.clearTimeout(retryTimer.current);
+    const current = requestVersion.current;
+    actionRunning.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      const imported = await refreshCallback.current();
+      if (current !== requestVersion.current) return;
+      if (imported) {
+        initialImportComplete.current = true;
+        clearBankConsentReturn(organisationId, entityId);
+        setImportMessage('Bank balances and transactions updated.');
+      } else setError('Bank data could not be updated yet. Check the connection and retry.');
+    } catch (caught) {
+      if (current === requestVersion.current)
+        setError(caught instanceof Error ? caught.message : 'Unable to refresh bank data.');
+    } finally {
+      if (current === requestVersion.current) {
+        actionRunning.current = false;
+        if (initialImportOwner === scopeKey) initialImportOwner = null;
+        setBusy(false);
+        await refreshStatus();
+      }
+    }
+  }
+
   async function disconnect() {
     if (actionRunning.current || workspaceBusy) return;
+    const current = requestVersion.current;
     actionRunning.current = true;
     setBusy(true);
     setError('');
     try {
       await disconnectBank(organisationId, entityId);
+      clearBankConsentReturn(organisationId, entityId);
+      initialImportStartedAt.current = null;
+      initialImportComplete.current = false;
+      setImportMessage('');
       setConfirmDisconnect(false);
       await onDisconnected();
-      await refreshStatus();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to disconnect banking.');
     } finally {
-      actionRunning.current = false;
-      setBusy(false);
+      if (current === requestVersion.current) {
+        actionRunning.current = false;
+        setBusy(false);
+        await refreshStatus();
+      }
     }
   }
 
@@ -219,6 +373,7 @@ export function BankingConnections({
             {error}
           </p>
         )}
+        {importMessage && <p role="status">{importMessage}</p>}
         <div className="banking-actions">
           <button
             className="button primary"
@@ -260,13 +415,21 @@ export function BankingConnections({
           <button
             className="button secondary"
             disabled={!enabled || locked}
-            onClick={() => void refreshStatus()}
+            onClick={() => {
+              initialImportStartedAt.current = null;
+              setError('');
+              void refreshStatus();
+            }}
           >
             <RefreshCw size={15} />
             Check status
           </button>
           {status?.connectionState === 'active' && (
-            <button className="button secondary" disabled={locked} onClick={() => void onRefresh()}>
+            <button
+              className="button secondary"
+              disabled={locked}
+              onClick={() => void refreshData()}
+            >
               Refresh data
             </button>
           )}

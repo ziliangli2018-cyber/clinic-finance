@@ -2,11 +2,13 @@ import type { FinanceDataset } from '../types/domain';
 import type { FinancePlan, PlanInput } from '../types/planning';
 import { calculateCategoryBreakdown } from '../domain/analytics';
 import { dateValue, shiftDate } from '../domain/dates';
+import { CSV_ORGANISATION_ID } from '../domain/csv-import';
 import { isMock, supabase } from './supabase';
 
 const storageKey = (organisationId: string) => `clinic-finance.plans.v1.${organisationId}`;
 const kinds = ['budget', 'goal', 'bill'];
 const frequencies = ['weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly'];
+const isLocal = (organisationId: string) => isMock || organisationId === CSV_ORGANISATION_ID;
 
 export function validatePlan(input: PlanInput, data: FinanceDataset): void {
   if (!kinds.includes(input.kind) || !input.name.trim() || input.name.trim().length > 120)
@@ -95,9 +97,9 @@ function fromRow(row: Record<string, unknown>): FinancePlan {
 }
 
 export async function loadPlans(data: FinanceDataset): Promise<FinancePlan[]> {
-  if (isMock) {
+  if (isLocal(data.organisation.id)) {
     const raw = localStorage.getItem(storageKey(data.organisation.id));
-    if (!raw) return demoPlans(data);
+    if (!raw) return data.organisation.id === CSV_ORGANISATION_ID ? [] : demoPlans(data);
     let value: unknown;
     try {
       value = JSON.parse(raw);
@@ -144,7 +146,7 @@ export async function persistPlan(data: FinanceDataset, input: PlanInput): Promi
     organisationId: data.organisation.id,
     name: input.name.trim(),
   };
-  if (isMock) return item;
+  if (isLocal(data.organisation.id)) return item;
   if (!supabase) throw new Error('The workspace is unavailable.');
   const row = {
     id: item.id,
@@ -165,7 +167,7 @@ export async function persistPlan(data: FinanceDataset, input: PlanInput): Promi
 }
 
 export async function deletePlan(organisationId: string, id: string): Promise<void> {
-  if (isMock) return;
+  if (isLocal(organisationId)) return;
   if (!supabase) throw new Error('The workspace is unavailable.');
   const { data, error } = await supabase
     .from('finance_plans')
@@ -178,5 +180,6 @@ export async function deletePlan(organisationId: string, id: string): Promise<vo
 }
 
 export function persistDemoPlans(organisationId: string, items: FinancePlan[]): void {
-  if (isMock) localStorage.setItem(storageKey(organisationId), JSON.stringify(items));
+  if (isLocal(organisationId))
+    localStorage.setItem(storageKey(organisationId), JSON.stringify(items));
 }

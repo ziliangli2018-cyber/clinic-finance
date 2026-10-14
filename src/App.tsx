@@ -36,13 +36,13 @@ import {
   SlidersHorizontal,
   Target,
   Wallet,
+  Upload,
   X,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { CashflowPoint, FinanceDataset, FinanceScope, Transaction } from './types/domain';
 import {
   calculateCategoryBreakdown,
-  calculateDailyCashflow,
   calculateSummary,
   filterTransactions,
   formatCompactMoney,
@@ -56,6 +56,12 @@ import { CashflowForecast } from './components/CashflowForecast';
 import { BankingConnections } from './components/BankingConnections';
 import { MoneyPlanning } from './components/MoneyPlanning';
 import { OverviewPortfolio } from './components/OverviewPortfolio';
+import { pendingBankConsentReturn } from './services/bank-consent-return';
+import { useCsvFinance } from './hooks/useCsvFinance';
+import { CsvImport } from './components/CsvImport';
+import { exportCsvBackup, getWorkspaceSource, setWorkspaceSource } from './services/csv-storage';
+import { createCsvDataset, isCsvDataset } from './domain/csv-import';
+import { chartCashflow } from './domain/chart-cashflow';
 
 type FinanceState = ReturnType<typeof useFinance>;
 const isoToday = () =>
@@ -71,42 +77,99 @@ const dateLabel = (
 ) => new Date(`${date}T00:00:00Z`).toLocaleDateString('en-AU', { ...options, timeZone: 'UTC' });
 
 export function App() {
-  const finance = useFinance();
-  const { data, loading, error } = finance;
+  const bankFinance = useFinance();
+  const csvFinance = useCsvFinance();
+  const [source, setSource] = useState<'bank' | 'csv'>(() =>
+    pendingBankConsentReturn()
+      ? 'bank'
+      : window.location.hash.startsWith('#/import')
+        ? 'csv'
+        : getWorkspaceSource(),
+  );
+  const [sourceError, setSourceError] = useState('');
+  const csvMode = source === 'csv';
+  const finance: FinanceState = csvMode ? csvFinance : bankFinance;
+  const { loading, error } = finance;
+  // Keep restore/reset controls available after corrupt or denied local storage.
+  // The hook will reject imports until the saved workspace is recovered.
+  const data = csvMode ? (csvFinance.data ?? createCsvDataset()) : finance.data;
   const [entityId, setEntityId] = useState('all');
   const [days, setDays] = useState(30);
   const [menu, setMenu] = useState(false);
   const location = useLocation();
-  const pageTitle = location.pathname.startsWith('/transactions')
-    ? 'Transactions'
-    : location.pathname.startsWith('/accounts')
-      ? 'Accounts'
-      : location.pathname.startsWith('/forecast')
-        ? 'Forecast'
-        : location.pathname.startsWith('/budgets')
-          ? 'Budgets'
-          : location.pathname.startsWith('/bills')
-            ? 'Bills'
-            : location.pathname.startsWith('/goals')
-              ? 'Goals'
-              : location.pathname.startsWith('/insights')
-                ? 'Insights'
-                : location.pathname.startsWith('/analytics')
-                  ? 'Analytics'
-                  : location.pathname.startsWith('/settings')
-                    ? 'Workspace'
-                    : 'Overview';
+  const navigate = useNavigate();
+  const selectSource = (next: 'bank' | 'csv') => {
+    if (next !== source) setDays(30);
+    setSource(next);
+    setSourceError('');
+    try {
+      setWorkspaceSource(next);
+    } catch {
+      setSourceError(
+        'Workspace selection could not be saved. This session remains usable; check browser storage.',
+      );
+    }
+    setEntityId('all');
+  };
+  const liveOrganisationId = data?.organisation.id;
+  useEffect(() => {
+    if (csvMode || isMock || !liveOrganisationId) return;
+    const pending = pendingBankConsentReturn();
+    if (pending?.organisationId === liveOrganisationId && location.pathname !== '/settings')
+      navigate('/settings', { replace: true });
+  }, [csvMode, liveOrganisationId, location.pathname, navigate]);
+  const pageTitle = location.pathname.startsWith('/import')
+    ? 'Import CSV'
+    : location.pathname.startsWith('/transactions')
+      ? 'Transactions'
+      : location.pathname.startsWith('/accounts')
+        ? 'Accounts'
+        : location.pathname.startsWith('/forecast')
+          ? 'Forecast'
+          : location.pathname.startsWith('/budgets')
+            ? 'Budgets'
+            : location.pathname.startsWith('/bills')
+              ? 'Bills'
+              : location.pathname.startsWith('/goals')
+                ? 'Goals'
+                : location.pathname.startsWith('/insights')
+                  ? 'Insights'
+                  : location.pathname.startsWith('/analytics')
+                    ? 'Analytics'
+                    : location.pathname.startsWith('/settings')
+                      ? 'Workspace'
+                      : 'Overview';
   const demoAsOf = data?.transactions
     .map((transaction) => transaction.postedAt)
     .sort()
     .at(-1);
-  const to = data?.organisation.isDemo ? demoAsOf || '2026-09-20' : isoToday();
+  const validEntityId = data?.entities.some((entity) => entity.id === entityId) ? entityId : 'all';
+  const reportAccounts =
+    data?.accounts.filter(
+      (account) => validEntityId === 'all' || account.entityId === validEntityId,
+    ) ?? [];
+  const reportAccountIds = new Set(reportAccounts.map((account) => account.id));
+  const csvAsOf = [
+    ...reportAccounts.map((account) => account.updatedAt.slice(0, 10)),
+    ...(data?.transactions
+      .filter((transaction) => reportAccountIds.has(transaction.accountId))
+      .map((transaction) => transaction.postedAt) ?? []),
+  ]
+    .sort()
+    .at(-1);
+  const to = csvMode
+    ? csvAsOf || isoToday()
+    : data?.organisation.isDemo
+      ? demoAsOf || '2026-09-20'
+      : isoToday();
   const fromDate = new Date(`${to}T00:00:00Z`);
   fromDate.setUTCDate(fromDate.getUTCDate() - days + 1);
-  const validEntityId = data?.entities.some((entity) => entity.id === entityId) ? entityId : 'all';
   const scope: FinanceScope = {
     entityId: validEntityId,
-    from: fromDate.toISOString().slice(0, 10),
+    from:
+      csvMode && days === 0
+        ? data?.transactions.map((transaction) => transaction.postedAt).sort()[0] || to
+        : fromDate.toISOString().slice(0, 10),
     to,
   };
   const entityName =
@@ -138,6 +201,10 @@ export function App() {
         </div>
         <p className="nav-caption">WORKSPACE</p>
         <nav aria-label="Main navigation" onClick={() => setMenu(false)}>
+          <NavLink to="/import" onClick={() => selectSource('csv')}>
+            <Upload size={19} />
+            Import CSV
+          </NavLink>
           <NavLink to="/" end>
             <LayoutDashboard size={19} />
             Overview
@@ -179,14 +246,18 @@ export function App() {
           <div className="workspace-note">
             <ShieldCheck size={22} />
             <strong>
-              {data?.organisation.isDemo || isMock
-                ? 'A safe place to explore'
-                : 'Your data, your workspace'}
+              {csvMode
+                ? 'Your statement workspace'
+                : data?.organisation.isDemo || isMock
+                  ? 'A safe place to explore'
+                  : 'Your data, your workspace'}
             </strong>
             <p>
-              {isMock
-                ? 'Sample data. No bank connection required.'
-                : 'Access is limited to members of your organisation.'}
+              {csvMode
+                ? 'Processed on this device. Not uploaded or bank-connected.'
+                : isMock
+                  ? 'Sample data. No bank connection required.'
+                  : 'Access is limited to members of your organisation.'}
             </p>
           </div>
           <nav>
@@ -198,8 +269,10 @@ export function App() {
           <div className="profile">
             <span>CF</span>
             <div>
-              <strong>{isMock ? 'Demo workspace' : 'Signed in securely'}</strong>
-              <small>Version 0.4</small>
+              <strong>
+                {csvMode ? 'Local CSV workspace' : isMock ? 'Demo workspace' : 'Signed in securely'}
+              </strong>
+              <small>Version 0.5</small>
             </div>
             {!isMock && (
               <button
@@ -228,8 +301,29 @@ export function App() {
             <strong>{pageTitle}</strong>
           </div>
           <div className="topbar-right">
-            <span className={`status-pill ${data?.organisation.isDemo || isMock ? 'demo' : ''}`}>
-              {data?.organisation.isDemo || isMock ? 'Demo environment' : 'Live workspace'}
+            <label className="workspace-source-select">
+              <span className="sr-only">Workspace data source</span>
+              <select
+                aria-label="Workspace data source"
+                value={source}
+                onChange={(event) => {
+                  selectSource(event.target.value as 'bank' | 'csv');
+                  if (event.target.value === 'bank' && location.pathname === '/import')
+                    navigate('/');
+                }}
+              >
+                <option value="bank">{isMock ? 'Sample data' : 'Bank workspace'}</option>
+                <option value="csv">My CSV data</option>
+              </select>
+            </label>
+            <span
+              className={`status-pill ${csvMode || data?.organisation.isDemo || isMock ? 'demo' : ''}`}
+            >
+              {csvMode
+                ? 'CSV · device only'
+                : data?.organisation.isDemo || isMock
+                  ? 'Demo environment'
+                  : 'Live workspace'}
             </span>
             <span className="currency-label">AUD</span>
           </div>
@@ -240,28 +334,32 @@ export function App() {
               <span className="eyebrow">YOUR PRACTICE, AT A GLANCE</span>
               <h1>{pageTitle === 'Overview' ? 'Financial overview' : pageTitle}</h1>
               <p>
-                {pageTitle === 'Overview'
-                  ? 'A clearer picture of where your money moves.'
-                  : pageTitle === 'Transactions'
-                    ? 'Every movement, organised and easy to find.'
-                    : pageTitle === 'Accounts'
-                      ? 'Your connected accounts, in one place.'
-                      : pageTitle === 'Forecast'
-                        ? 'See how recurring movements and recent spending may shape your cash position.'
-                        : pageTitle === 'Analytics'
-                          ? 'Understand the patterns behind your cash flow.'
-                          : pageTitle === 'Budgets'
-                            ? 'Set spending limits and see how your practices are tracking.'
-                            : pageTitle === 'Bills'
-                              ? 'See recurring payments before they arrive.'
-                              : pageTitle === 'Goals'
-                                ? 'Build your reserves, one goal at a time.'
-                                : pageTitle === 'Insights'
-                                  ? 'Turn your financial activity into useful next steps.'
-                                  : 'Manage your organisation and data connections.'}
+                {pageTitle === 'Import CSV'
+                  ? 'Turn bank statement files into a clear view of your clinic finances.'
+                  : pageTitle === 'Overview'
+                    ? 'A clearer picture of where your money moves.'
+                    : pageTitle === 'Transactions'
+                      ? 'Every movement, organised and easy to find.'
+                      : pageTitle === 'Accounts'
+                        ? csvMode
+                          ? 'Your imported statement accounts, in one place.'
+                          : 'Your connected accounts, in one place.'
+                        : pageTitle === 'Forecast'
+                          ? 'See how recurring movements and recent spending may shape your cash position.'
+                          : pageTitle === 'Analytics'
+                            ? 'Understand the patterns behind your cash flow.'
+                            : pageTitle === 'Budgets'
+                              ? 'Set spending limits and see how your practices are tracking.'
+                              : pageTitle === 'Bills'
+                                ? 'See recurring payments before they arrive.'
+                                : pageTitle === 'Goals'
+                                  ? 'Build your reserves, one goal at a time.'
+                                  : pageTitle === 'Insights'
+                                    ? 'Turn your financial activity into useful next steps.'
+                                    : 'Manage your organisation and data connections.'}
               </p>
             </div>
-            {data && (
+            {data && !csvMode && (
               <button
                 className="button secondary"
                 disabled={
@@ -280,7 +378,28 @@ export function App() {
               </button>
             )}
           </div>
-          {data && isMock && <DemoNotice finance={finance} />}
+          {data && !csvMode && isMock && <DemoNotice finance={finance} />}
+          {csvMode && (
+            <section className="csv-workspace-notice" aria-label="CSV workspace information">
+              <Upload size={21} />
+              <div>
+                <strong>Statement-based workspace · no simulated activity</strong>
+                <p>
+                  Your files stay in this browser. Balances are dated statement snapshots, not
+                  real-time bank balances. Browser storage is not encrypted; use a trusted device
+                  and keep an imported-data backup.
+                </p>
+              </div>
+              <NavLink className="button secondary" to="/import">
+                Import statements
+              </NavLink>
+            </section>
+          )}
+          {sourceError && (
+            <p className="error-box" role="alert">
+              {sourceError}
+            </p>
+          )}
           {error && (
             <div role="alert" className="error-box">
               {error}
@@ -299,7 +418,7 @@ export function App() {
             <Onboarding finance={finance} />
           ) : (
             <>
-              {pageTitle !== 'Workspace' && (
+              {pageTitle !== 'Workspace' && pageTitle !== 'Import CSV' && (
                 <div className="filterbar">
                   <div className="entity-tabs" role="group" aria-label="Business entity">
                     <button
@@ -325,11 +444,63 @@ export function App() {
                       <option value={30}>Last 30 days</option>
                       <option value={60}>Last 60 days</option>
                       <option value={90}>Last 90 days</option>
+                      {csvMode && <option value={0}>All imported history</option>}
                     </select>
                   </label>
                 </div>
               )}
               <Routes>
+                <Route
+                  path="/import"
+                  element={
+                    <CsvImport
+                      key={csvFinance.workspaceRevision}
+                      data={csvFinance.data ?? createCsvDataset()}
+                      busy={csvFinance.busy}
+                      error={csvFinance.error}
+                      onImport={csvFinance.importRows}
+                      onActivate={() => selectSource('csv')}
+                      onBackup={() => {
+                        if (!csvFinance.data) return;
+                        const url = URL.createObjectURL(
+                          new Blob([exportCsvBackup(csvFinance.data)], {
+                            type: 'application/json',
+                          }),
+                        );
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = `clinic-finance-imported-data-${isoToday()}.json`;
+                        link.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                      onRestore={async (file) => {
+                        if (file.size > 10 * 1024 * 1024)
+                          throw new Error('Backups must be 10 MiB or smaller.');
+                        if (
+                          (csvFinance.data?.transactions.length ||
+                            csvFinance.data?.accounts.length) &&
+                          !window.confirm(
+                            'Replace imported accounts and transactions with this backup? Export your current imported-data backup first. Sample and bank data are unaffected.',
+                          )
+                        )
+                          throw new Error('Backup restore cancelled. Existing data is unchanged.');
+                        if (await csvFinance.restoreBackup(await file.text())) selectSource('csv');
+                        else
+                          throw new Error(
+                            'Backup could not be restored. Check the workspace error.',
+                          );
+                      }}
+                      onClear={() => {
+                        if (
+                          window.confirm(
+                            'Remove imported accounts and transactions from this browser? Sample and bank workspaces are unaffected. Export an imported-data backup first.',
+                          )
+                        )
+                          void csvFinance.resetDemo();
+                      }}
+                    />
+                  }
+                />
                 <Route
                   path="/"
                   element={
@@ -349,7 +520,7 @@ export function App() {
                     path={`/${view}`}
                     element={
                       <MoneyPlanning
-                        key={`${data.organisation.id}:${view}`}
+                        key={`${data.organisation.id}:${view}:${csvMode ? csvFinance.workspaceRevision : ''}`}
                         view={view}
                         data={data}
                         scope={scope}
@@ -357,18 +528,44 @@ export function App() {
                     }
                   />
                 ))}
-                <Route path="/settings" element={<Workspace finance={finance} />} />
+                <Route
+                  path="/settings"
+                  element={
+                    csvMode ? (
+                      <section className="panel">
+                        <PanelHeading
+                          title="Local CSV workspace"
+                          subtitle="Accounts and transactions are stored on this device only"
+                        />
+                        <div className="settings-body">
+                          <p>
+                            No bank credentials or cloud uploads are used. Use Import CSV to add
+                            another account, restore an imported-data backup or remove imported
+                            records.
+                          </p>
+                          <NavLink to="/import" className="button primary">
+                            Manage CSV data
+                          </NavLink>
+                        </div>
+                      </section>
+                    ) : (
+                      <Workspace finance={finance} />
+                    )
+                  }
+                />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
               <footer className="page-footer">
                 <span>
-                  {data.organisation.isDemo
-                    ? `Fictitious data · ${dateLabel(to, { day: 'numeric', month: 'long', year: 'numeric' })}`
-                    : 'Secure organisation workspace'}{' '}
+                  {csvMode
+                    ? `Imported statement data · through ${dateLabel(to, { day: 'numeric', month: 'long', year: 'numeric' })}`
+                    : data.organisation.isDemo
+                      ? `Fictitious data · ${dateLabel(to, { day: 'numeric', month: 'long', year: 'numeric' })}`
+                      : 'Secure organisation workspace'}{' '}
                   · All amounts in AUD
                 </span>
                 <span>
-                  Clinic Finance <span className="footer-version">0.4</span>
+                  Clinic Finance <span className="footer-version">0.5</span>
                 </span>
               </footer>
             </>
@@ -530,22 +727,34 @@ function Dashboard({
       <OverviewPortfolio data={data} scope={scope} />
       <div className="metric-grid">
         <Metric
-          label="Available cash"
-          value={formatMoney(availableCash)}
-          caption={`${formatMoney(cash)} current · ${formatMoney(pendingOutflows)} pending out`}
+          label={isCsvDataset(data) ? 'Statement cash balance' : 'Available cash'}
+          value={formatMoney(isCsvDataset(data) ? cash : availableCash)}
+          caption={
+            isCsvDataset(data)
+              ? 'Sum of entered cash-account balance snapshots'
+              : `${formatMoney(cash)} current · ${formatMoney(pendingOutflows)} pending out`
+          }
           icon={<Wallet size={19} />}
           primary
         />
         <Metric
           label="Money in"
           value={formatMoney(summary.incomeCents)}
-          caption={`Posted inflows · last ${days} days`}
+          caption={
+            days === 0
+              ? 'Posted inflows · all imported history'
+              : `Posted inflows · last ${days} days`
+          }
           icon={<ArrowDownLeft size={19} />}
         />
         <Metric
           label="Money out"
           value={formatMoney(summary.expenseCents)}
-          caption={`Posted outflows · last ${days} days`}
+          caption={
+            days === 0
+              ? 'Posted outflows · all imported history'
+              : `Posted outflows · last ${days} days`
+          }
           icon={<ArrowUpRight size={19} />}
         />
         <Metric
@@ -561,7 +770,7 @@ function Dashboard({
             title="Cash flow"
             subtitle={`${entityName} · ${dateLabel(scope.from!)} – ${dateLabel(scope.to!)}`}
           />
-          <CashflowChart points={calculateDailyCashflow(data, scope)} />
+          <CashflowVisualisation data={data} scope={scope} />
         </section>
         <section className="panel">
           <PanelHeading title="Where it goes" subtitle="Expenses by category" />
@@ -621,7 +830,12 @@ function PanelHeading({
   );
 }
 
-function CashflowChart({ points }: { points: CashflowPoint[] }) {
+function CashflowVisualisation({ data, scope }: { data: FinanceDataset; scope: FinanceScope }) {
+  const chart = chartCashflow(data, scope);
+  return <CashflowChart points={chart.points} grouping={chart.grouping} />;
+}
+
+function CashflowChart({ points, grouping = '' }: { points: CashflowPoint[]; grouping?: string }) {
   const grouped: CashflowPoint[] = [];
   const size = Math.max(1, Math.ceil(points.length / 12));
   for (let i = 0; i < points.length; i += size) {
@@ -661,7 +875,8 @@ function CashflowChart({ points }: { points: CashflowPoint[] }) {
         aria-label="Money in and money out across the selected period"
       >
         <title>
-          Posted cash flow, excluding internal transfers. Values grouped into {size}-day periods.
+          Posted cash flow, excluding internal transfers.{' '}
+          {grouping || `Values grouped into ${size}-day periods.`}
         </title>
         {[0, 0.25, 0.5, 0.75, 1].map((fraction) => (
           <g key={fraction}>
@@ -710,14 +925,19 @@ function CashflowChart({ points }: { points: CashflowPoint[] }) {
                     fill="#829198"
                     fontSize="10"
                   >
-                    {dateLabel(point.date)}
+                    {dateLabel(
+                      point.date,
+                      grouping ? { day: 'numeric', month: 'short', year: 'numeric' } : undefined,
+                    )}
                   </text>
                 ),
             )}
           </>
         )}
       </svg>
-      <p className="chart-note">Grouped in {size}-day periods · pending entries excluded</p>
+      <p className="chart-note">
+        {grouping || `Grouped in ${size}-day periods`} · pending entries excluded
+      </p>
     </div>
   );
 }
@@ -1500,9 +1720,11 @@ function TransactionDetail({
           </label>
         )}
         <p className="muted detail-hint">
-          {isMock
-            ? 'Category changes are saved only in this browser until you reset the demo.'
-            : 'Category changes are saved to your organisation and recorded in the audit log.'}
+          {isCsvDataset(data)
+            ? 'Category changes are saved only in this browser. Export an imported-data backup to retain them.'
+            : isMock
+              ? 'Category changes are saved only in this browser until you reset the demo.'
+              : 'Category changes are saved to your organisation and recorded in the audit log.'}
         </p>
         <button
           className="button primary"
@@ -1585,7 +1807,9 @@ function Accounts({ data, scope }: { data: FinanceDataset; scope: FinanceScope }
               {entity.kind === 'clinic'
                 ? 'Dental practice'
                 : entity.kind === 'group'
-                  ? 'Shared group finance'
+                  ? isCsvDataset(data)
+                    ? 'Loan entity supplied at import'
+                    : 'Shared group finance'
                   : 'Personal finances'}
             </span>
           </div>
@@ -1605,10 +1829,13 @@ function Accounts({ data, scope }: { data: FinanceDataset; scope: FinanceScope }
                       )}
                     </span>
                     <span className="small-badge">
-                      {data.connections.find((connection) => connection.id === account.connectionId)
-                        ?.provider === 'mock'
-                        ? 'Mock connection'
-                        : 'Connected'}
+                      {isCsvDataset(data)
+                        ? 'CSV statement'
+                        : data.connections.find(
+                              (connection) => connection.id === account.connectionId,
+                            )?.provider === 'mock'
+                          ? 'Mock connection'
+                          : 'Connected'}
                     </span>
                   </div>
                   <h3>{account.name}</h3>
@@ -1623,7 +1850,9 @@ function Accounts({ data, scope }: { data: FinanceDataset; scope: FinanceScope }
                           ? 'Outstanding balance'
                           : account.kind === 'term_deposit'
                             ? 'Term deposit balance'
-                            : 'Current balance'}
+                            : isCsvDataset(data)
+                              ? 'Statement balance'
+                              : 'Current balance'}
                     </small>
                     <strong>
                       {formatMoney(
@@ -1641,17 +1870,22 @@ function Accounts({ data, scope }: { data: FinanceDataset; scope: FinanceScope }
                         </span>
                       )}
                   </div>
-                  {!isMock && (
+                  {!isMock && !isCsvDataset(data) && (
                     <p className="account-ownership-lock">
                       Legal owner fixed by {entity.name}'s bank consent
                     </p>
                   )}
                   <div className="account-card-footer">
                     <span>
-                      {new Date(account.updatedAt).toLocaleDateString('en-AU', {
-                        day: 'numeric',
-                        month: 'short',
-                      })}
+                      {isCsvDataset(data)
+                        ? `Statement as of ${dateLabel(account.updatedAt.slice(0, 10), { day: 'numeric', month: 'short', year: 'numeric' })}`
+                        : new Date(account.updatedAt).toLocaleString('en-AU', {
+                            day: 'numeric',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            timeZone: 'Australia/Brisbane',
+                          })}
                     </span>
                     <button
                       className="text-button"
@@ -1682,7 +1916,7 @@ function Analytics({ data, scope }: { data: FinanceDataset; scope: FinanceScope 
           title="Cash flow over time"
           subtitle={`${dateLabel(scope.from!)} – ${dateLabel(scope.to!)} · posted transactions`}
         />
-        <CashflowChart points={calculateDailyCashflow(data, scope)} />
+        <CashflowVisualisation data={data} scope={scope} />
         <div className="analytics-totals">
           <div>
             <span>Money in</span>
@@ -1833,8 +2067,10 @@ function Workspace({ finance }: { finance: FinanceState }) {
               entityKind={entity.kind}
               workspaceBusy={finance.busy}
               enabled={!isMock}
-              onRefresh={async () => finance.sync(entity.id)}
-              onDisconnected={finance.refresh}
+              onRefresh={async () => Boolean(await finance.sync(entity.id))}
+              onDisconnected={async () => {
+                await finance.refresh({ background: true });
+              }}
             />
           ))
       )}

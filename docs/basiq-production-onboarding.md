@@ -15,8 +15,9 @@ For each profile, the legal business name, ABN/ACN, registered address and verif
 1. Apply for a Basiq Business Application and complete its commercial, security and CDR access-model review. Confirm the approved model in writing; do not infer accreditation from an API key.
 2. Configure the Basiq consent experience for business accounts, required account/transaction scopes, a retrieval period no longer than the approved consent term, and **Allow Multiple Connections**.
 3. Enable and verify NAB institution `AU01001` and BOQ Specialist institution `AU20130` in the production Basiq application.
-4. For NAB, ensure the nominated authorised user has NAB Internet Banking (NAB Connect alone is insufficient), an active NAB ID and SMS mobile.
-5. For a company/trust BOQ Specialist account, nominate a representative with authority, digital banking access, mobile and email. Confirm the exact loan is visible in BOQ Specialist Online Banking or its app.
+4. Configure the Consent UI success/return URL as `https://ziliangli2018-cyber.github.io/clinic-finance/#/settings`. Returning in the same browser tab preserves the non-secret pending entity marker and starts initial import automatically. A root-page return is also routed to banking settings when that marker is present.
+5. For NAB, ensure the nominated authorised user has NAB Internet Banking (NAB Connect alone is insufficient), an active NAB ID and SMS mobile.
+6. For a company/trust BOQ Specialist account, nominate a representative with authority, digital banking access, mobile and email. Confirm the exact loan is visible in BOQ Specialist Online Banking or its app.
 
 Official references: [Basiq Business Consumer Consent](https://api.basiq.io/docs/business-consumer-consent), [Basiq go-live checklist](https://api.basiq.io/docs/go-live-checklist), [NAB Open Banking](https://www.nab.com.au/customer-notices/open-banking), and [BOQ Specialist Open Banking](https://www.boqspecialist.com.au/help-and-support/important-information/open-banking).
 

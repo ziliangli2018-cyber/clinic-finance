@@ -1,5 +1,5 @@
 import type { Account, Transaction } from '../types/domain.ts';
-import { daysBetween } from './dates.ts';
+import { dateValue, daysBetween } from './dates.ts';
 
 const TRANSFER_DESCRIPTION =
   /\b(INTERNAL TRANSFER|OWN ACCOUNT|CARD REPAYMENT|CREDIT CARD PAYMENT)\b/i;
@@ -45,19 +45,47 @@ export function detectInternalTransfers(
     );
   });
   const candidates = new Map<string, Transaction[]>();
+  // Index by organisation, currency, signed amount and account. CSV ledgers may
+  // contain thousands of rows: scanning the complete ledger for every row would
+  // block the browser. Two possible counterparts already prove ambiguity.
+  const bucketKey = (transaction: Transaction, amount = transaction.amountCents) =>
+    `${transaction.organisationId}:${transaction.currency}:${amount}`;
+  const buckets = new Map<string, Map<string, Transaction[]>>();
   for (const transaction of eligible) {
-    candidates.set(
-      transaction.id,
-      eligible.filter(
-        (other) =>
-          transaction.id !== other.id &&
-          transaction.accountId !== other.accountId &&
-          transaction.organisationId === other.organisationId &&
-          transaction.currency === other.currency &&
-          transaction.amountCents === -other.amountCents &&
-          daysBetween(transaction.postedAt, other.postedAt) <= maxDaysApart,
-      ),
-    );
+    if (!Number.isFinite(dateValue(transaction.postedAt))) continue;
+    const key = bucketKey(transaction);
+    const accountsInBucket = buckets.get(key) ?? new Map<string, Transaction[]>();
+    const rows = accountsInBucket.get(transaction.accountId) ?? [];
+    rows.push(transaction);
+    accountsInBucket.set(transaction.accountId, rows);
+    buckets.set(key, accountsInBucket);
+  }
+  for (const accountsInBucket of buckets.values())
+    for (const rows of accountsInBucket.values())
+      rows.sort((a, b) => a.postedAt.localeCompare(b.postedAt));
+  const windowMs = maxDaysApart * 86_400_000;
+  for (const transaction of eligible) {
+    const possible: Transaction[] = [];
+    const date = dateValue(transaction.postedAt);
+    const accountsInBucket = buckets.get(bucketKey(transaction, -transaction.amountCents));
+    if (Number.isFinite(date) && accountsInBucket)
+      for (const [accountId, rows] of accountsInBucket) {
+        if (accountId === transaction.accountId) continue;
+        let left = 0;
+        let right = rows.length;
+        while (left < right) {
+          const middle = Math.floor((left + right) / 2);
+          if (dateValue(rows[middle].postedAt) < date - windowMs) left = middle + 1;
+          else right = middle;
+        }
+        for (let index = left; index < rows.length && possible.length < 2; index++) {
+          const other = rows[index];
+          if (dateValue(other.postedAt) > date + windowMs) break;
+          if (other.id !== transaction.id) possible.push(other);
+        }
+        if (possible.length >= 2) break;
+      }
+    candidates.set(transaction.id, possible);
   }
   const pairs = new Map<string, string>();
   for (const transaction of eligible) {
